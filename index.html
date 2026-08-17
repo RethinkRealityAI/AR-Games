@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>AR Tic-Tac-Toe Arena</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Import Map for Three.js -->
+    <script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0"
+  }
+}
+</script>
+
+    <style>
+      /* Custom scrollbar for webkit */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #0f172a;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #334155;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #475569;
+      }
+      
+      body, html, #root {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background-color: #020617; /* Darker slate */
+        font-family: 'Inter', sans-serif;
+      }
+
+      /* Galaxy Background Animation for Lobby */
+      .galaxy-bg {
+        background: radial-gradient(ellipse at bottom, #1b2735 0%, #090a0f 100%);
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: -1;
+        overflow: hidden;
+      }
+      
+      .stars {
+        width: 1px;
+        height: 1px;
+        background: transparent;
+        box-shadow: 
+          1744px 122px #FFF , 
+          134px 1321px #FFF , 
+          92px 859px #FFF;
+        animation: animStar 50s linear infinite;
+      }
+      
+      .stars:after {
+        content: " ";
+        position: absolute;
+        top: 2000px;
+        width: 1px;
+        height: 1px;
+        background: transparent;
+        box-shadow: 
+          1744px 122px #FFF , 
+          134px 1321px #FFF , 
+          92px 859px #FFF;
+      }
+
+      @keyframes animStar {
+        from { transform: translateY(0px); }
+        to { transform: translateY(-2000px); }
+      }
+
+      /* Phone Scanning Animation */
+      @keyframes phone-scan {
+        0% { transform: translateX(-20px) rotateY(-15deg); }
+        50% { transform: translateX(20px) rotateY(15deg); }
+        100% { transform: translateX(-20px) rotateY(-15deg); }
+      }
+      
+      .phone-anim {
+        animation: phone-scan 3s ease-in-out infinite;
+      }
+      
+      /* Glassmorphism utilities */
+      .glass-panel {
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+      }
+    </style>
+  <link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

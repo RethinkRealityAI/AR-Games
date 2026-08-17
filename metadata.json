@@ -1,0 +1,9 @@
+{
+  "name": "AR Tic-Tac-Toe Arena",
+  "description": "A real-time augmented reality Tic-Tac-Toe game powered by Gemini AI.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": []
+}
