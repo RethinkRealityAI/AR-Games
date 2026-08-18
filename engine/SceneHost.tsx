@@ -88,14 +88,26 @@ const SceneHost: React.FC<SceneHostProps> = ({
   const winnerRef = useRef(winner);
   const placedRef = useRef(false);
   const lockRef = useRef(false); // input lock until core changes
+  const lockTimerRef = useRef<number | null>(null);
+
+  const releaseLock = useCallback(() => {
+    lockRef.current = false;
+    if (lockTimerRef.current !== null) {
+      clearTimeout(lockTimerRef.current);
+      lockTimerRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     coreRef.current = core;
-    lockRef.current = false;
-  }, [core]);
+    releaseLock();
+  }, [core, releaseLock]);
   useEffect(() => {
     enabledRef.current = enabled;
-  }, [enabled]);
+    // Input becoming available again always clears a stale lock (e.g. a move
+    // the server rejected, which never produces a new core).
+    if (enabled) releaseLock();
+  }, [enabled, releaseLock]);
   useEffect(() => {
     onMoveRef.current = onMove;
   }, [onMove]);
@@ -195,6 +207,12 @@ const SceneHost: React.FC<SceneHostProps> = ({
       const move = scene.pickMove(rc, coreRef.current);
       if (move) {
         lockRef.current = true;
+        // Failsafe: never leave the board permanently unresponsive.
+        if (lockTimerRef.current !== null) clearTimeout(lockTimerRef.current);
+        lockTimerRef.current = window.setTimeout(() => {
+          lockRef.current = false;
+          lockTimerRef.current = null;
+        }, 2500);
         onMoveRef.current(move);
       }
     },
@@ -664,6 +682,10 @@ const SceneHost: React.FC<SceneHostProps> = ({
       hitTestSourceRef.current = null;
       hitTestRequestedRef.current = false;
       pointersRef.current.clear();
+      if (lockTimerRef.current !== null) {
+        clearTimeout(lockTimerRef.current);
+        lockTimerRef.current = null;
+      }
     };
     // Mount-only: everything else is synced through refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps

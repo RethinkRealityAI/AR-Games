@@ -27,6 +27,7 @@ const ChatDock: React.FC<ChatDockProps> = ({ mySlot, profiles, hidden, onHiddenC
 
   const openRef = useRef(open);
   const seenRef = useRef(0);
+  const lenRef = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
   const holdRef = useRef<number | null>(null);
 
@@ -40,32 +41,28 @@ const ChatDock: React.FC<ChatDockProps> = ({ mySlot, profiles, hidden, onHiddenC
 
   // --- subscribe -----------------------------------------------------------
   useEffect(() => {
+    // Diffing lives outside the state updater so it never runs twice.
     const ingest = (next: ChatMessage[]) => {
-      setMessages((prev) => {
-        if (next.length === prev.length) return prev;
-        const incoming = next.slice(prev.length);
-        const fromOther = incoming.some((m) => m.slot !== mySlot);
-        if (fromOther) sound.playChat();
-        if (!openRef.current) {
-          setUnread(next.length - seenRef.current);
-        } else {
-          seenRef.current = next.length;
-        }
-        return next;
-      });
+      if (next.length === lenRef.current) return;
+      const incoming = next.slice(lenRef.current);
+      lenRef.current = next.length;
+      if (incoming.some((m) => m.slot !== mySlot)) sound.playChat();
+      setMessages(next);
+      if (openRef.current) seenRef.current = next.length;
+      else setUnread(next.length - seenRef.current);
     };
-
-    const off = netClient.on((e) => {
-      if (e.type === 'chat') ingest(e.messages);
-      else if (e.type === 'session') ingest(e.session.chat ?? []);
-    });
 
     const existing = netClient.session?.chat;
     if (existing && existing.length) {
-      setMessages(existing);
+      lenRef.current = existing.length;
       seenRef.current = existing.length;
+      setMessages(existing);
     }
-    return off;
+
+    return netClient.on((e) => {
+      if (e.type === 'chat') ingest(e.messages);
+      else if (e.type === 'session') ingest(e.session.chat ?? []);
+    });
   }, [mySlot]);
 
   // --- autoscroll ----------------------------------------------------------
