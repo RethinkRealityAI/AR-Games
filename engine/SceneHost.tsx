@@ -735,8 +735,8 @@ const SceneHost: React.FC<SceneHostProps> = ({
       }
       if (gameSceneRef.current === gs) gameSceneRef.current = null;
     };
-    // profiles are mutated in place below; a change of identity also rebuilds.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // `profiles` must be a stable reference from the caller (GameScreen memoises
+    // it) — a new identity here tears the scene down and rebuilds it.
   }, [gameId, ready, profiles, frameCamera, applyCamera]);
 
   // Rim lights follow the two players' colours.
