@@ -1,9 +1,8 @@
 {
-  "name": "AR Tic-Tac-Toe Arena",
-  "description": "A real-time augmented reality Tic-Tac-Toe game powered by Gemini AI.",
+  "name": "Cosmic Arcade",
+  "description": "A liquid-glass AR/3D arcade: play Cosmic Tac-Toe and Nebula Four in augmented reality, against AI, pass-and-play, or online.",
   "requestFramePermissions": [
-    "camera",
-    "microphone"
+    "camera"
   ],
   "majorCapabilities": []
 }
