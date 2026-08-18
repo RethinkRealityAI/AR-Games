@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import type { GameScene, SceneContext } from '../../engine/sceneTypes';
 import type { PlayerProfile, PlayerSlot } from '../../types';
 import type { TttBoard } from './logic';
+import { getPieceModel, prefetchPieceModel } from '../../services/models';
 
 const GOLD = 0xfcd34d;
 
@@ -283,8 +284,42 @@ export function createTicTacToeScene(): GameScene {
     return group;
   };
 
+  /**
+   * Premium Higgsfield GLB piece: an independent clone of the cached template
+   * with a glowing base ring in the player's color so identity stays readable.
+   * The ring's material is created per-piece (it is tinted), tracked in
+   * premiumMats for disposal.
+   */
+  const premiumMats: THREE.Material[] = [];
+  const buildPremiumPiece = (slot: PlayerSlot, template: THREE.Group): THREE.Group => {
+    const group = new THREE.Group();
+    group.add(template.clone(true));
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: colorOf(slot),
+      transparent: true,
+      opacity: 0.75,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    premiumMats.push(ringMat);
+    const ring = new THREE.Mesh(
+      geo('premium-ring', () => new THREE.TorusGeometry(0.052, 0.005, 8, 40).rotateX(-Math.PI / 2)),
+      ringMat,
+    );
+    ring.position.y = 0.004;
+    group.add(ring);
+    group.userData.spin = (t: number) => {
+      ring.rotation.y = t / 900;
+      const pulse = 0.6 + Math.sin(t / 420) * 0.2;
+      ringMat.opacity = pulse;
+    };
+    return group;
+  };
+
   const buildPiece = (slot: PlayerSlot): THREE.Group => {
     const type = ctx?.profiles[slot]?.avatarId ?? 'ASTRONAUT';
+    const premium = getPieceModel(type);
+    if (premium) return buildPremiumPiece(slot, premium);
     if (type === 'DRONE') return createDrone(slot);
     if (type === 'CRYSTAL') return createCrystal(slot);
     return createAstronaut(slot);
@@ -362,6 +397,11 @@ export function createTicTacToeScene(): GameScene {
       spacing = S / 3;
       tileSize = spacing * 0.85;
       pieceScale = (S / 0.5) * 0.92;
+
+      // Kick off premium Higgsfield model loads; pieces spawned before a model
+      // arrives fall back to the procedural builds.
+      prefetchPieceModel(c.profiles[0].avatarId);
+      prefetchPieceModel(c.profiles[1].avatarId);
 
       // Galaxy disc beneath the board.
       galaxy = createGalaxy();
@@ -573,6 +613,8 @@ export function createTicTacToeScene(): GameScene {
       matCache.forEach((m) => m.dispose());
       geoCache.clear();
       matCache.clear();
+      premiumMats.forEach((m) => m.dispose());
+      premiumMats.length = 0;
       ctx = null;
       lastTime = 0;
     },
