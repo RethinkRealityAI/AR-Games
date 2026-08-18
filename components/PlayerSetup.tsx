@@ -1,143 +1,214 @@
-import React, { useState } from 'react';
-import { PlayerProfile, AvatarType } from '../types';
-import { soundService } from '../services/soundService';
+import React, { useEffect, useMemo, useState } from 'react';
+import type { AvatarType, GameMode, PlayerProfile } from '../types';
+import {
+  AVATAR_OPTIONS,
+  AuroraBackground,
+  AvatarGlyph,
+  BackButton,
+  ColorSwatches,
+  DEFAULT_COLOR_P1,
+  DEFAULT_COLOR_P2,
+  GlassButton,
+  Icon,
+  rgba,
+} from './GlassUI';
+import { sound } from '../services/sound';
+
+export const AI_PROFILE: PlayerProfile = {
+  name: 'NOVA',
+  avatarId: 'DRONE',
+  color: DEFAULT_COLOR_P2,
+};
+
+export const DEFAULT_PROFILES: [PlayerProfile, PlayerProfile] = [
+  { name: 'Commander', avatarId: 'ASTRONAUT', color: DEFAULT_COLOR_P1 },
+  { name: 'Player 2', avatarId: 'CRYSTAL', color: DEFAULT_COLOR_P2 },
+];
 
 interface PlayerSetupProps {
-  onComplete: (profile: PlayerProfile) => void;
+  mode: GameMode;
+  /** Headline context, e.g. the game name or "Joining ABC123". */
+  contextLabel?: string;
+  initial?: [PlayerProfile, PlayerProfile];
+  onComplete: (profiles: [PlayerProfile, PlayerProfile]) => void;
   onBack: () => void;
 }
 
-const AVATAR_OPTIONS: { id: AvatarType; label: string; desc: string }[] = [
-  { id: 'ASTRONAUT', label: 'Explorer', desc: 'Classic space suit' },
-  { id: 'DRONE', label: 'Sentinel', desc: 'Hovering droid' },
-  { id: 'CRYSTAL', label: 'Shard', desc: 'Psionic energy' },
-];
+const PlayerSetup: React.FC<PlayerSetupProps> = ({
+  mode,
+  contextLabel,
+  initial = DEFAULT_PROFILES,
+  onComplete,
+  onBack,
+}) => {
+  const twoPlayers = mode === 'local';
+  const [step, setStep] = useState<0 | 1>(0);
+  const [p1, setP1] = useState<PlayerProfile>(initial[0]);
+  const [p2, setP2] = useState<PlayerProfile>(initial[1]);
 
-const COLOR_OPTIONS = [
-  { hex: '#0088ff', name: 'Blue' },
-  { hex: '#00ff88', name: 'Green' },
-  { hex: '#ff00ff', name: 'Pink' },
-  { hex: '#ffaa00', name: 'Gold' },
-];
+  const current = step === 0 ? p1 : p2;
+  const setCurrent = step === 0 ? setP1 : setP2;
 
-const PlayerSetup: React.FC<PlayerSetupProps> = ({ onComplete, onBack }) => {
-  const [name, setName] = useState('Player 1');
-  const [selectedAvatar, setSelectedAvatar] = useState<AvatarType>('ASTRONAUT');
-  const [selectedColor, setSelectedColor] = useState(COLOR_OPTIONS[0].hex);
+  // Keep the second player off the first player's colour.
+  useEffect(() => {
+    if (twoPlayers && step === 1 && p2.color === p1.color) {
+      const next = p1.color === DEFAULT_COLOR_P2 ? DEFAULT_COLOR_P1 : DEFAULT_COLOR_P2;
+      setP2((v) => ({ ...v, color: next }));
+    }
+  }, [step, twoPlayers, p1.color, p2.color]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const heading = useMemo(() => {
+    if (twoPlayers) return step === 0 ? 'Player One' : 'Player Two';
+    return 'Your Pilot';
+  }, [twoPlayers, step]);
+
+  const ctaLabel = twoPlayers && step === 0 ? 'Next player' : 'Launch';
+
+  const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
-    soundService.playStart();
-    onComplete({
-      name: name.trim(),
-      avatarId: selectedAvatar,
-      color: selectedColor
-    });
+    if (!current.name.trim()) return;
+    sound.resume();
+    if (twoPlayers && step === 0) {
+      sound.playClick();
+      setStep(1);
+      return;
+    }
+    sound.playStart();
+    const a: PlayerProfile = { ...p1, name: p1.name.trim() || 'Player 1' };
+    const b: PlayerProfile = twoPlayers
+      ? { ...p2, name: p2.name.trim() || 'Player 2' }
+      : mode === 'ai'
+        ? { ...AI_PROFILE, color: p1.color === AI_PROFILE.color ? DEFAULT_COLOR_P1 : AI_PROFILE.color }
+        : { ...p2, name: 'Opponent' };
+    onComplete([a, b]);
   };
 
   return (
-    <div className="max-w-md w-full p-6 relative z-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="glass-panel rounded-3xl p-6">
-        
-        <div className="flex items-center justify-between mb-6">
-            <button onClick={onBack} className="text-slate-400 hover:text-white transition-colors">
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-            </button>
-            <h2 className="text-2xl font-bold text-white tracking-wider">CUSTOMIZE</h2>
-            <div className="w-6"></div>
+    <div className="relative h-full overflow-y-auto">
+      <AuroraBackground />
+      <div className="relative z-10 mx-auto flex min-h-full w-full max-w-md flex-col px-5 pb-10 pt-7 sm:px-8">
+        <div className="mb-6 flex items-center justify-between">
+          <BackButton
+            onClick={() => {
+              if (twoPlayers && step === 1) setStep(0);
+              else onBack();
+            }}
+          />
+          {contextLabel && <span className="label">{contextLabel}</span>}
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Name Input */}
-          <div className="space-y-2">
-            <label className="text-xs text-cyan-300 font-bold uppercase tracking-wider ml-1">Call Sign</label>
-            <input
-              type="text"
-              value={name}
-              maxLength={10}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full bg-black/30 border border-white/10 text-white px-4 py-3 rounded-xl focus:outline-none focus:border-cyan-500/50 focus:bg-black/50 transition-all font-mono"
-              placeholder="ENTER NAME"
-            />
-          </div>
-
-          {/* Avatar Selection */}
-          <div className="space-y-3">
-            <label className="text-xs text-cyan-300 font-bold uppercase tracking-wider ml-1">Select Model</label>
-            <div className="grid grid-cols-3 gap-3">
-              {AVATAR_OPTIONS.map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => {
-                      setSelectedAvatar(opt.id);
-                      soundService.playClick();
-                  }}
-                  className={`relative p-3 rounded-xl border transition-all flex flex-col items-center gap-2 ${
-                    selectedAvatar === opt.id
-                      ? 'bg-cyan-500/20 border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.3)]'
-                      : 'bg-white/5 border-white/10 hover:bg-white/10'
-                  }`}
-                >
-                  {/* Simple CSS representations of models */}
-                  <div className="w-10 h-10 flex items-center justify-center">
-                      {opt.id === 'ASTRONAUT' && (
-                          <div className="w-6 h-8 bg-slate-200 rounded-t-full relative">
-                              <div className="absolute top-2 left-1 w-4 h-3 bg-black rounded-full"></div>
-                          </div>
-                      )}
-                      {opt.id === 'DRONE' && (
-                          <div className="w-8 h-8 border-2 border-slate-200 rounded-full flex items-center justify-center">
-                              <div className="w-3 h-3 bg-cyan-400 rounded-full"></div>
-                          </div>
-                      )}
-                      {opt.id === 'CRYSTAL' && (
-                          <div className="w-0 h-0 border-l-[10px] border-l-transparent border-r-[10px] border-r-transparent border-b-[20px] border-b-slate-200"></div>
-                      )}
-                  </div>
-                  <span className={`text-[10px] font-bold ${selectedAvatar === opt.id ? 'text-white' : 'text-slate-400'}`}>
-                      {opt.label}
-                  </span>
-                </button>
-              ))}
+        <div className="flex flex-1 flex-col justify-center">
+        <form onSubmit={submit} className="glass anim-spring rounded-[26px] p-6">
+          <div className="mb-5 flex items-center gap-4">
+            <span
+              className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl"
+              style={{
+                background: `radial-gradient(circle at 34% 26%, ${rgba(current.color, 0.42)}, rgba(2,6,23,.7))`,
+                boxShadow: `inset 0 1px 0 rgba(255,255,255,.16), 0 12px 30px -14px ${rgba(current.color, 0.9)}`,
+              }}
+            >
+              <AvatarGlyph type={current.avatarId} color={current.color} size={46} />
+            </span>
+            <div className="min-w-0">
+              <h1 className="font-display text-2xl font-bold tracking-tight">{heading}</h1>
+              <p className="mt-0.5 text-[13px] text-slate-400">
+                {twoPlayers
+                  ? 'Both pilots share one device — pick distinct colours.'
+                  : 'Name your pilot, pick a hull and a colour.'}
+              </p>
             </div>
           </div>
 
-          {/* Color Selection */}
-          <div className="space-y-3">
-             <label className="text-xs text-cyan-300 font-bold uppercase tracking-wider ml-1">Hull Color</label>
-             <div className="flex justify-between bg-black/20 p-2 rounded-xl border border-white/5">
-                {COLOR_OPTIONS.map((c) => (
+          {twoPlayers && (
+            <div className="mb-5 flex gap-1.5">
+              {[0, 1].map((i) => (
+                <span
+                  key={i}
+                  className="h-1 flex-1 rounded-full transition-colors"
+                  style={{
+                    background: i <= step ? 'linear-gradient(90deg,#67e8f9,#a78bfa)' : 'rgba(255,255,255,.12)',
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          <div className="space-y-5">
+            <div className="space-y-2">
+              <label className="label ml-1 block" htmlFor="callsign">
+                Call sign
+              </label>
+              <input
+                id="callsign"
+                type="text"
+                value={current.name}
+                maxLength={14}
+                autoComplete="off"
+                onChange={(e) => setCurrent({ ...current, name: e.target.value })}
+                placeholder="Enter name"
+                className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3.5 font-medium tracking-wide text-white outline-none transition-all placeholder:text-white/25 focus:border-cyan-400/50 focus:bg-black/50"
+              />
+            </div>
+
+            <div className="space-y-2.5">
+              <span className="label ml-1 block">Hull</span>
+              <div className="grid grid-cols-3 gap-2.5">
+                {AVATAR_OPTIONS.map((opt) => {
+                  const active = current.avatarId === opt.id;
+                  return (
                     <button
-                        key={c.hex}
-                        type="button"
-                        onClick={() => {
-                            setSelectedColor(c.hex);
-                            soundService.playClick();
-                        }}
-                        className={`w-10 h-10 rounded-full border-2 transition-all ${
-                            selectedColor === c.hex ? 'scale-110 border-white shadow-lg' : 'border-transparent opacity-70 hover:opacity-100'
-                        }`}
-                        style={{ backgroundColor: c.hex }}
-                        title={c.name}
-                    />
-                ))}
-             </div>
+                      key={opt.id}
+                      type="button"
+                      onClick={() => {
+                        sound.playClick();
+                        setCurrent({ ...current, avatarId: opt.id as AvatarType });
+                      }}
+                      className="press relative flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3 transition-all"
+                      style={{
+                        background: active ? rgba(current.color, 0.16) : 'rgba(255,255,255,.04)',
+                        boxShadow: active
+                          ? `inset 0 0 0 1px ${rgba(current.color, 0.75)}, 0 10px 26px -14px ${rgba(current.color, 0.9)}`
+                          : 'inset 0 0 0 1px rgba(255,255,255,.07)',
+                      }}
+                    >
+                      <AvatarGlyph
+                        type={opt.id}
+                        color={active ? current.color : '#94a3b8'}
+                        size={38}
+                      />
+                      <span
+                        className={`text-[11px] font-semibold ${active ? 'text-white' : 'text-slate-400'}`}
+                      >
+                        {opt.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-2.5">
+              <span className="label ml-1 block">Colour</span>
+              <ColorSwatches
+                value={current.color}
+                onChange={(hex) => setCurrent({ ...current, color: hex })}
+                disabledHex={twoPlayers && step === 1 ? p1.color : undefined}
+              />
+            </div>
           </div>
 
-          <button
-            type="submit"
-            className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-4 rounded-xl shadow-[0_0_20px_rgba(6,182,212,0.4)] flex items-center justify-center gap-2 transition-all active:scale-95 mt-4"
-          >
-            <span>ENTER ARENA</span>
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
-          </button>
+          <GlassButton type="submit" variant="primary" block className="mt-6 !py-3.5" silent>
+            {ctaLabel}
+            <Icon name="back" size={18} className="rotate-180" />
+          </GlassButton>
         </form>
+
+        {mode === 'ai' && (
+          <p className="mt-5 text-center text-[11px] text-slate-500">
+            You play first. NOVA answers on the other side of the table.
+          </p>
+        )}
+        </div>
       </div>
     </div>
   );
