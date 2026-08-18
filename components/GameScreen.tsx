@@ -119,27 +119,38 @@ const GameScreen: React.FC<GameScreenProps> = ({
   }, [gameId, online]);
 
   // -- online: mirror the session -------------------------------------------
+  const sessionRef = useRef<Session | null>(initialSession);
   useEffect(() => {
     if (!online) return;
+
+    // Compared by moveCount/round rather than object identity: a polling client
+    // hands us a freshly parsed Session every tick, and the scenes need a `prev`
+    // that is exactly one move behind for the drop/spawn animations to play.
+    const apply = (next: Session) => {
+      const prev = sessionRef.current;
+      sessionRef.current = next;
+      if (prev && (prev.core.moveCount !== next.core.moveCount || prev.round !== next.round)) {
+        setPrevOnlineCore(prev.core);
+      }
+      if (prev && prev.round !== next.round) setRematchPending(false);
+      setSession(next);
+      setPending(false);
+      setNetError(null);
+    };
+
     const off = netClient.on((e) => {
       if (e.type === 'session') {
-        setSession((prev) => {
-          if (prev && prev.core !== e.session.core) setPrevOnlineCore(prev.core);
-          if (prev && prev.round !== e.session.round) setRematchPending(false);
-          return e.session;
-        });
-        setPending(false);
-        setNetError(null);
+        apply(e.session);
       } else if (e.type === 'error') {
         setNetError(e.message);
         setPending(false);
       } else if (e.type === 'connection') {
-        if (!e.online) setNetError('Connection lost — retrying…');
-        else setNetError(null);
+        setNetError(e.online ? null : 'Connection lost — retrying…');
       }
     });
+
     const current = netClient.session;
-    if (current) setSession(current);
+    if (current) apply(current);
     return off;
   }, [online]);
 
