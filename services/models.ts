@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import type { AvatarType } from '../types';
 
-const MODEL_URLS: Record<AvatarType, string> = {
+const MODEL_URLS: Partial<Record<AvatarType, string>> = {
   ASTRONAUT:
     'https://d8j0ntlcm91z4.cloudfront.net/user_33Txeg6YsaHeKOwmprAOf8Wr55B/hf_20260818_053104_cdc6e9ce-72d4-47d1-bbdb-f3cdc1897796.glb',
   DRONE:

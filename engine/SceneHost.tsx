@@ -24,6 +24,7 @@ import type { GameScene, GameSceneFactory, SceneContext } from './sceneTypes';
 import type { GameCore, GameId, Move, PlayerProfile, PlayerSlot } from '../types';
 import { createTicTacToeScene } from '../games/tictactoe/scene';
 import { createConnect4Scene } from '../games/connect4/scene';
+import { createChessScene } from '../games/chess/scene';
 import { sound } from '../services/sound';
 import { Icon, rgba } from '../components/GlassUI';
 
@@ -32,6 +33,7 @@ import { Icon, rgba } from '../components/GlassUI';
 const SCENE_FACTORIES: Record<GameId, GameSceneFactory> = {
   tictactoe: createTicTacToeScene,
   connect4: createConnect4Scene,
+  chess: createChessScene,
 };
 
 /** Board footprint + fallback-camera framing per game. */
@@ -39,6 +41,7 @@ const FRAMING: Record<GameId, { boardSize: number; targetY: number; fitRadius: n
   {
     tictactoe: { boardSize: 0.5, targetY: 0.045, fitRadius: 0.3, phi: 0.8 },
     connect4: { boardSize: 0.62, targetY: 0.3, fitRadius: 0.36, phi: 1.34 },
+    chess: { boardSize: 0.56, targetY: 0.06, fitRadius: 0.36, phi: 0.9 },
   };
 
 const FOV = 55;

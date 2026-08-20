@@ -62,11 +62,25 @@ const GAME_GLYPH: Record<GameId, React.ReactNode> = {
       )}
     </svg>
   ),
+  chess: (
+    <svg viewBox="0 0 64 64" className="h-full w-full" fill="none" aria-hidden>
+      {/* knight silhouette */}
+      <path
+        d="M24 52h20M26 48h16M40 44c2-6 6-10 6-18 0-10-8-16-16-16l2 5c-6 1-11 6-13 12l-3 8 6-2 3-4c1 3 0 6-2 9-2 2-3 4-3 6h20z"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      <circle cx="30" cy="22" r="1.6" fill="currentColor" />
+    </svg>
+  ),
 };
 
 const CARD_TINT: Record<GameId, [string, string]> = {
   tictactoe: ['#22d3ee', '#8b5cf6'],
   connect4: ['#e879f9', '#38bdf8'],
+  chess: ['#fbbf24', '#7c3aed'],
 };
 
 const Landing: React.FC<{ onPickGame: (id: GameId) => void }> = ({ onPickGame }) => (

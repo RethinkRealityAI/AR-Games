@@ -4,7 +4,7 @@
 // function. Do not change existing fields; adding optional fields is OK.
 // ============================================================================
 
-export type GameId = 'tictactoe' | 'connect4';
+export type GameId = 'tictactoe' | 'connect4' | 'chess';
 
 /** Slot 0 = host / X / first color. Slot 1 = guest / O / second color. */
 export type PlayerSlot = 0 | 1;
@@ -13,7 +13,7 @@ export type GameMode = 'ai' | 'local' | 'online';
 
 export type Difficulty = 'easy' | 'medium' | 'hard';
 
-export type AvatarType = 'ASTRONAUT' | 'DRONE' | 'CRYSTAL';
+export type AvatarType = 'ASTRONAUT' | 'DRONE' | 'CRYSTAL' | 'ROCKET' | 'SATURN' | 'COMET';
 
 export interface PlayerProfile {
   name: string;
@@ -21,10 +21,17 @@ export interface PlayerProfile {
   color: string; // hex, e.g. '#38bdf8'
 }
 
-/** Serializable move. Tic-tac-toe uses `cell` (0-8); Connect Four uses `column` (0-6). */
+/**
+ * Serializable move. Tic-tac-toe uses `cell` (0-8); Connect Four uses
+ * `column` (0-6); chess uses `from`/`to` (0-63, a1=0 … h8=63) plus an
+ * optional `promotion` when a pawn reaches the last rank.
+ */
 export interface Move {
   cell?: number;
   column?: number;
+  from?: number;
+  to?: number;
+  promotion?: 'q' | 'r' | 'b' | 'n';
 }
 
 /** Platform-level game state. `board` is game-specific JSON; games cast it. */

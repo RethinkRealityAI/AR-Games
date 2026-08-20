@@ -1,6 +1,7 @@
 import { GameDefinition, GameId } from '../types';
 import { tictactoeLogic } from './tictactoe/logic';
 import { connect4Logic } from './connect4/logic';
+import { chessLogic } from './chess/logic';
 
 export const GAMES: Record<GameId, GameDefinition> = {
   tictactoe: {
@@ -20,6 +21,15 @@ export const GAMES: Record<GameId, GameDefinition> = {
       cardArt: '/assets/card-connect4.webp',
     },
     logic: connect4Logic,
+  },
+  chess: {
+    meta: {
+      id: 'chess',
+      name: 'Astral Chess',
+      tagline: 'The royal game, played among nebulae',
+      cardArt: '/assets/card-chess.webp',
+    },
+    logic: chessLogic,
   },
 };
 
