@@ -53,8 +53,8 @@ const MAX_CHAT = 100;
 const MAX_CHAT_LEN = 280;
 const MAX_NAME_LEN = 14;
 
-const AVATARS: AvatarType[] = ['ASTRONAUT', 'DRONE', 'CRYSTAL'];
-const GAME_IDS: GameId[] = ['tictactoe', 'connect4'];
+const AVATARS: AvatarType[] = ['ASTRONAUT', 'DRONE', 'CRYSTAL', 'ROCKET', 'SATURN', 'COMET'];
+const GAME_IDS = Object.keys(GAMES) as GameId[];
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
