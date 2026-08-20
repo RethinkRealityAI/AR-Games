@@ -1,7 +1,7 @@
 // ============================================================================
 // SceneHost — the Three.js / WebXR host.
 //
-// Two presentation paths share one renderer, scene graph and game scene:
+// Three presentation paths share one renderer, scene graph and game scene:
 //
 //  1. FALLBACK "holo-table" (always available, shown first): the board floats
 //     over a galaxy particle disc in a soft dark environment. Pointer-drag
@@ -12,6 +12,13 @@
 //     tap to place, dom-overlay UI, 1-finger rotate / 2-finger pinch-scale,
 //     transparent page background. These behaviours are ported from the
 //     battle-tested legacy ArBoard.
+//
+//  3. AR LITE (no WebXR, but a phone with a camera and motion sensors — i.e.
+//     iOS Safari, which still has no immersive-ar in 2026): the rear camera
+//     feed is painted behind the transparent canvas and the camera's rotation
+//     is driven by `deviceorientation`. No world tracking, so the board is
+//     anchored to a virtual floor 1.4 m below the viewer; the viewer only
+//     rotates (3-DoF). Gestures match the WebXR path. See ./arLite.
 //
 // The host owns placement, camera, gestures and raycasting; each game's
 // GameScene owns everything inside `root`.
@@ -27,6 +34,21 @@ import { createConnect4Scene } from '../games/connect4/scene';
 import { createChessScene } from '../games/chess/scene';
 import { sound } from '../services/sound';
 import { Icon, rgba } from '../components/GlassUI';
+import {
+  AR_LITE_FLOOR_DROP,
+  AR_LITE_FOV,
+  AR_LITE_SCALE_MAX,
+  AR_LITE_SCALE_MIN,
+  ArLiteError,
+  DeviceOrientationTracker,
+  createCameraVideoElement,
+  detectArTier,
+  projectToVirtualFloor,
+  startArLiteSensors,
+  stopStream,
+  teardownCameraVideo,
+  type ArTier,
+} from './arLite';
 
 // -- registry ---------------------------------------------------------------
 
@@ -78,10 +100,16 @@ const SceneHost: React.FC<SceneHostProps> = ({
   repositionNonce = 0,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [arSupported, setArSupported] = useState<boolean | null>(null);
+  const [arTier, setArTier] = useState<ArTier | null>(null);
   const [xrActive, setXrActive] = useState(false);
+  const [liteActive, setLiteActive] = useState(false);
+  const [liteStarting, setLiteStarting] = useState(false);
+  const [arNotice, setArNotice] = useState<string | null>(null);
   const [placed, setPlaced] = useState(false);
   const [ready, setReady] = useState(false);
+
+  /** Either AR path is compositing over the real world. */
+  const arActive = xrActive || liteActive;
 
   // --- stale-closure-safe mirrors of every prop the render loop reads ------
   const coreRef = useRef(core);
@@ -142,6 +170,25 @@ const SceneHost: React.FC<SceneHostProps> = ({
   const hitTestRequestedRef = useRef(false);
   const isMountedRef = useRef(true);
 
+  // --- AR Lite refs --------------------------------------------------------
+  const liteActiveRef = useRef(false);
+  const liteStartingRef = useRef(false);
+  const liteVideoRef = useRef<HTMLVideoElement | null>(null);
+  const trackerRef = useRef<DeviceOrientationTracker | null>(null);
+  const liteQuatRef = useRef(new THREE.Quaternion());
+  const noticeTimerRef = useRef<number | null>(null);
+
+  /** Non-blocking, self-dismissing notice (permission denied, no camera…). */
+  const showNotice = useCallback((message: string) => {
+    if (!isMountedRef.current) return;
+    setArNotice(message);
+    if (noticeTimerRef.current !== null) clearTimeout(noticeTimerRef.current);
+    noticeTimerRef.current = window.setTimeout(() => {
+      noticeTimerRef.current = null;
+      if (isMountedRef.current) setArNotice(null);
+    }, 4200);
+  }, []);
+
   // --- camera / gesture state ---------------------------------------------
   const orbitRef = useRef({ theta: 0, phi: 0.78, dist: 1.4, baseDist: 1.4, zoom: 1, targetY: 0 });
   const lastInteractRef = useRef(0);
@@ -200,8 +247,49 @@ const SceneHost: React.FC<SceneHostProps> = ({
       -(clientY / window.innerHeight) * 2 + 1,
     );
 
+  /**
+   * AR Lite placement: intersect the tap ray with the virtual floor. There is
+   * no hit-test, so the "surface" is simply a horizontal plane a fixed drop
+   * below the viewer's eye.
+   */
+  const placeBoardLite = useCallback(
+    (clientX: number, clientY: number) => {
+      const anchor = anchorRef.current;
+      const camera = cameraRef.current;
+      const root = rootRef.current;
+      if (!anchor || !camera || !root) return;
+      const rc = raycasterFrom(ndcFromClient(clientX, clientY));
+      if (!rc) return;
+
+      const pos = projectToVirtualFloor(rc.ray, camera.position.y - AR_LITE_FLOOR_DROP);
+      anchor.position.copy(pos);
+      // Face the board towards the viewer, who never leaves the origin.
+      const camPos = new THREE.Vector3();
+      camera.getWorldPosition(camPos);
+      anchor.rotation.set(0, Math.atan2(camPos.x - pos.x, camPos.z - pos.z), 0);
+      anchor.scale.setScalar(1);
+
+      root.rotation.set(0, 0, 0);
+      root.scale.setScalar(1);
+      root.visible = true;
+      if (reticleRef.current) reticleRef.current.visible = false;
+
+      placedRef.current = true;
+      setPlaced(true);
+      sound.playMove();
+    },
+    [raycasterFrom],
+  );
+
   const handleTap = useCallback(
     (clientX: number, clientY: number) => {
+      // Placement comes before the turn gate: in AR Lite the tap that anchors
+      // the board must work even when it is not your move. (The WebXR path
+      // gets this for free — placement arrives on the XR `select` event.)
+      if (liteActiveRef.current && !placedRef.current) {
+        placeBoardLite(clientX, clientY);
+        return;
+      }
       if (lockRef.current || !enabledRef.current) return;
       const scene = gameSceneRef.current;
       if (!scene || !placedRef.current) return;
@@ -219,7 +307,7 @@ const SceneHost: React.FC<SceneHostProps> = ({
         onMoveRef.current(move);
       }
     },
-    [raycasterFrom],
+    [raycasterFrom, placeBoardLite],
   );
 
   // ------------------------------------------------------------------------
@@ -255,12 +343,14 @@ const SceneHost: React.FC<SceneHostProps> = ({
     };
 
     const onPointerMove = (e: PointerEvent) => {
-      const presenting = !!rendererRef.current?.xr.isPresenting;
+      // AR Lite behaves like the WebXR path: gestures move the *board*, never
+      // the camera (which belongs to the gyro).
+      const arMode = !!rendererRef.current?.xr.isPresenting || liteActiveRef.current;
       const prev = pointersRef.current.get(e.pointerId);
 
       // Desktop hover highlight when no button is held.
       if (!prev && e.pointerType === 'mouse') {
-        hoverNdcRef.current = ndcFromClient(e.clientX, e.clientY);
+        hoverNdcRef.current = arMode ? null : ndcFromClient(e.clientX, e.clientY);
         return;
       }
       if (!prev) return;
@@ -272,8 +362,11 @@ const SceneHost: React.FC<SceneHostProps> = ({
         const dist = Math.hypot(a.x - b.x, a.y - b.y);
         if (pinchRef.current.dist > 0) {
           const ratio = dist / pinchRef.current.dist;
-          if (presenting && rootRef.current) {
-            const s = THREE.MathUtils.clamp(pinchRef.current.scale * ratio, 0.2, 3);
+          if (arMode && rootRef.current) {
+            const [lo, hi] = liteActiveRef.current
+              ? [AR_LITE_SCALE_MIN, AR_LITE_SCALE_MAX]
+              : [0.2, 3];
+            const s = THREE.MathUtils.clamp(pinchRef.current.scale * ratio, lo, hi);
             rootRef.current.scale.setScalar(s);
           } else {
             orbitRef.current.zoom = THREE.MathUtils.clamp(
@@ -295,8 +388,8 @@ const SceneHost: React.FC<SceneHostProps> = ({
       d.x = e.clientX;
       d.y = e.clientY;
 
-      if (presenting) {
-        // AR: 1-finger drag spins the placed board.
+      if (arMode) {
+        // AR: 1-finger horizontal drag spins the placed board.
         if (rootRef.current && placedRef.current) rootRef.current.rotation.y += dx * 0.005;
       } else {
         const o = orbitRef.current;
@@ -325,7 +418,7 @@ const SceneHost: React.FC<SceneHostProps> = ({
     };
 
     const onWheel = (e: WheelEvent) => {
-      if (rendererRef.current?.xr.isPresenting) return;
+      if (rendererRef.current?.xr.isPresenting || liteActiveRef.current) return;
       e.preventDefault();
       touch();
       const o = orbitRef.current;
@@ -400,19 +493,10 @@ const SceneHost: React.FC<SceneHostProps> = ({
     const container = containerRef.current;
     if (!container || rendererRef.current) return;
 
-    // XR support probe.
-    if (typeof navigator !== 'undefined' && 'xr' in navigator && navigator.xr) {
-      navigator.xr
-        .isSessionSupported('immersive-ar')
-        .then((s) => {
-          if (isMountedRef.current) setArSupported(s);
-        })
-        .catch(() => {
-          if (isMountedRef.current) setArSupported(false);
-        });
-    } else {
-      setArSupported(false);
-    }
+    // AR capability probe: real WebXR, else camera+gyro AR Lite, else holo only.
+    void detectArTier().then((tier) => {
+      if (isMountedRef.current) setArTier(tier);
+    });
 
     const scene = new THREE.Scene();
     sceneRef.current = scene;
@@ -558,6 +642,8 @@ const SceneHost: React.FC<SceneHostProps> = ({
 
     // --- render loop ------------------------------------------------------
     let lastFrame = 0;
+    const centreNdc = new THREE.Vector2(0, 0);
+    const floorScratch = new THREE.Vector3();
     const render = (time: number, frame?: XRFrame) => {
       const r = rendererRef.current;
       const s = sceneRef.current;
@@ -567,19 +653,30 @@ const SceneHost: React.FC<SceneHostProps> = ({
       lastFrame = time;
 
       const presenting = r.xr.isPresenting;
+      const lite = liteActiveRef.current;
+      const arMode = presenting || lite;
 
-      if (!presenting) {
+      if (lite) {
+        // 3-DoF: the viewer sits at the origin and only ever rotates. Before
+        // the first deviceorientation event the camera keeps the holo-table
+        // orientation, which already looks down at the floor — so the reticle
+        // is sensible even on a device whose sensors never report.
+        c.position.set(0, 0, 0);
+        if (trackerRef.current?.applyTo(liteQuatRef.current)) {
+          c.quaternion.copy(liteQuatRef.current);
+        }
+      } else if (!presenting) {
         // Idle auto-rotate that yields to the user for a beat.
         if (performance.now() - lastInteractRef.current > IDLE_DELAY) {
           orbitRef.current.theta += AUTO_ROTATE * dt;
         }
         applyCamera();
-        if (backdropRef.current) {
-          backdropRef.current.visible = true;
-          backdropRef.current.rotation.y += dt * 0.006;
-        }
-      } else if (backdropRef.current) {
-        backdropRef.current.visible = false;
+      }
+
+      // The starfield is the holo table's backdrop; the real world replaces it.
+      if (backdropRef.current) {
+        backdropRef.current.visible = !arMode;
+        if (!arMode) backdropRef.current.rotation.y += dt * 0.006;
       }
 
       // AR hit-test while unplaced.
@@ -611,6 +708,19 @@ const SceneHost: React.FC<SceneHostProps> = ({
             reticleRef.current.visible = false;
           }
         }
+      } else if (lite && !placedRef.current && reticleRef.current) {
+        // AR Lite has no surface detection, so the reticle previews where the
+        // centre of the screen meets the virtual floor.
+        const rc = raycasterFrom(centreNdc);
+        if (rc) {
+          projectToVirtualFloor(rc.ray, c.position.y - AR_LITE_FLOOR_DROP, floorScratch);
+          reticleRef.current.visible = true;
+          reticleRef.current.matrix.makeTranslation(
+            floorScratch.x,
+            floorScratch.y,
+            floorScratch.z,
+          );
+        }
       } else if (reticleRef.current && placedRef.current) {
         reticleRef.current.visible = false;
       }
@@ -618,7 +728,7 @@ const SceneHost: React.FC<SceneHostProps> = ({
       // Hover highlight (desktop pointer only).
       const gs = gameSceneRef.current;
       if (gs?.hover) {
-        if (!presenting && hoverNdcRef.current && enabledRef.current) {
+        if (!arMode && hoverNdcRef.current && enabledRef.current) {
           const rc = raycasterFrom(hoverNdcRef.current);
           if (rc) gs.hover(rc, coreRef.current);
         } else {
@@ -637,6 +747,18 @@ const SceneHost: React.FC<SceneHostProps> = ({
       renderer.setAnimationLoop(null);
       window.removeEventListener('resize', onResize);
       controller.removeEventListener('select', onSelect);
+
+      // Hard-release the camera and sensors first: leaving the game must never
+      // leave the camera indicator lit.
+      liteActiveRef.current = false;
+      trackerRef.current?.stop();
+      trackerRef.current = null;
+      teardownCameraVideo(liteVideoRef.current);
+      liteVideoRef.current = null;
+      if (noticeTimerRef.current !== null) {
+        clearTimeout(noticeTimerRef.current);
+        noticeTimerRef.current = null;
+      }
 
       try {
         gameSceneRef.current?.dispose();
@@ -822,27 +944,140 @@ const SceneHost: React.FC<SceneHostProps> = ({
     }
   }, [applyCamera, frameCamera]);
 
-  // Reposition request (AR only).
+  // ------------------------------------------------------------------------
+  // AR Lite lifecycle (camera + gyro)
+  // ------------------------------------------------------------------------
+
+  /** Releases camera + sensors and restores the holo-table view. */
+  const stopArLite = useCallback(
+    (notice?: string) => {
+      liteActiveRef.current = false;
+
+      trackerRef.current?.stop();
+      trackerRef.current = null;
+      teardownCameraVideo(liteVideoRef.current);
+      liteVideoRef.current = null;
+
+      const camera = cameraRef.current;
+      if (camera) {
+        camera.fov = FOV;
+        camera.quaternion.identity();
+        camera.updateProjectionMatrix();
+      }
+      const anchor = anchorRef.current;
+      if (anchor) {
+        anchor.position.set(0, 0, 0);
+        anchor.rotation.set(0, 0, 0);
+        anchor.scale.setScalar(1);
+      }
+      const root = rootRef.current;
+      if (root) {
+        root.rotation.set(0, 0, 0);
+        root.scale.setScalar(1);
+        root.visible = true;
+      }
+      if (reticleRef.current) reticleRef.current.visible = false;
+
+      placedRef.current = true;
+      if (!isMountedRef.current) return;
+      setLiteActive(false);
+      setPlaced(true);
+      frameCamera();
+      applyCamera();
+      if (notice) showNotice(notice);
+    },
+    [applyCamera, frameCamera, showNotice],
+  );
+
+  const startArLite = useCallback(async () => {
+    const renderer = rendererRef.current;
+    const camera = cameraRef.current;
+    const scene = sceneRef.current;
+    const container = containerRef.current;
+    if (!renderer || !camera || !scene || !container) return;
+    if (liteActiveRef.current || liteStartingRef.current) return;
+
+    liteStartingRef.current = true;
+    setLiteStarting(true);
+    sound.resume();
+    sound.playClick();
+
+    try {
+      // Kicks off the iOS motion prompt and getUserMedia inside this gesture.
+      const { stream } = await startArLiteSensors();
+      if (!isMountedRef.current) {
+        stopStream(stream);
+        return;
+      }
+
+      const video = createCameraVideoElement(stream);
+      // Behind the renderer canvas, which already clears fully transparent.
+      container.insertBefore(video, container.firstChild);
+      liteVideoRef.current = video;
+
+      const tracker = new DeviceOrientationTracker();
+      tracker.start();
+      trackerRef.current = tracker;
+
+      scene.background = null;
+      camera.fov = AR_LITE_FOV;
+      camera.position.set(0, 0, 0);
+      camera.updateProjectionMatrix();
+
+      // The board must be (re)placed against the virtual floor.
+      liteActiveRef.current = true;
+      placedRef.current = false;
+      if (rootRef.current) rootRef.current.visible = false;
+      setLiteActive(true);
+      setPlaced(false);
+
+      // Deliberately *not* awaited: the element is already on screen, so
+      // pausing here would leave the camera feed showing behind a canvas still
+      // drawing the holo table — and taps in that window would be routed to the
+      // holo handler instead of placement. The muted/playsinline/autoplay
+      // attributes are what actually satisfy iOS; this is just a nudge.
+      void video.play().catch(() => {
+        /* autoplay policy — attributes cover iOS Safari */
+      });
+    } catch (err) {
+      console.warn('[SceneHost] AR Lite unavailable', err);
+      stopArLite(
+        err instanceof ArLiteError ? err.notice : 'AR unavailable — showing the holo table.',
+      );
+    } finally {
+      liteStartingRef.current = false;
+      if (isMountedRef.current) setLiteStarting(false);
+    }
+  }, [stopArLite]);
+
+  const enterAr = useCallback(() => {
+    if (arTier === 'webxr') void startAR();
+    else if (arTier === 'lite') void startArLite();
+  }, [arTier, startAR, startArLite]);
+
+  // Reposition request (either AR path).
   useEffect(() => {
     if (repositionNonce === 0) return;
-    if (!rendererRef.current?.xr.isPresenting) return;
+    if (!rendererRef.current?.xr.isPresenting && !liteActiveRef.current) return;
     placedRef.current = false;
     setPlaced(false);
     if (rootRef.current) rootRef.current.visible = false;
     hitTestSourceRef.current = null;
     hitTestRequestedRef.current = false;
+    // Re-centre AR Lite's yaw so the reticle starts under the current aim.
+    trackerRef.current?.recentre();
   }, [repositionNonce]);
 
-  // Page background must be see-through while an XR session composites.
+  // Page background must be see-through while AR composites over the camera.
   useEffect(() => {
-    onArActiveChange?.(xrActive);
+    onArActiveChange?.(arActive);
     const html = document.documentElement;
-    if (xrActive) html.classList.add('xr-active');
+    if (arActive) html.classList.add('xr-active');
     else html.classList.remove('xr-active');
     return () => {
       html.classList.remove('xr-active');
     };
-  }, [xrActive, onArActiveChange]);
+  }, [arActive, onArActiveChange]);
 
   useEffect(() => {
     onPlacedChange?.(placed);
@@ -862,17 +1097,59 @@ const SceneHost: React.FC<SceneHostProps> = ({
         style={{ touchAction: 'none' }}
       />
 
-      {/* Enter AR — floats over the fallback view when AR is available. */}
-      {arSupported === true && !xrActive && (
+      {/* Enter AR — floats over the fallback view on both AR tiers. */}
+      {arTier !== null && arTier !== 'none' && !arActive && (
         <div className="pointer-events-none absolute inset-x-0 bottom-28 z-30 flex justify-center px-6">
           <button
-            onClick={() => void startAR()}
+            onClick={enterAr}
+            disabled={liteStarting}
             className="glass-btn pointer-events-auto anim-fade-up !rounded-full !px-6 !py-3 text-sm font-bold tracking-wide"
             style={{ boxShadow: `0 0 0 1px ${rgba(accent, 0.35)}, 0 18px 40px -16px ${rgba(accent, 0.7)}` }}
           >
             <Icon name="ar" size={18} />
             Enter AR
           </button>
+        </div>
+      )}
+
+      {/* Leave AR Lite — the WebXR path gets an exit affordance from the UA. */}
+      {liteActive && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-28 z-30 flex justify-center px-6">
+          <button
+            onClick={() => {
+              sound.playClick();
+              stopArLite();
+            }}
+            className="glass-btn pointer-events-auto anim-fade-up !rounded-full !px-5 !py-2.5 text-xs font-bold tracking-wide"
+          >
+            <Icon name="close" size={15} />
+            Exit AR
+          </button>
+        </div>
+      )}
+
+      {/* Placement affordance — AR Lite aims at a virtual floor, not a surface.
+          Sits above centre so it never covers the reticle being aimed. */}
+      {liteActive && !placed && (
+        <div className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-start px-8 pt-[21vh] text-center">
+          <div className="phone-anim mb-5 opacity-90">
+            <div className="relative h-16 w-10 rounded-xl border-2 border-white/85">
+              <span className="absolute left-1/2 top-1.5 h-0.5 w-3.5 -translate-x-1/2 rounded-full bg-white/60" />
+              <span className="absolute bottom-1.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-white/60" />
+            </div>
+          </div>
+          <div className="glass-strong max-w-xs rounded-2xl px-6 py-4">
+            <p className="font-display text-base font-bold tracking-wide text-cyan-300">
+              AIM AT THE FLOOR…
+            </p>
+            <p className="mt-1 text-sm text-slate-300">
+              Tilt your phone down until the ring sits where you want to play.
+            </p>
+            <div className="shimmer mt-3 h-1 w-full overflow-hidden rounded-full bg-white/15" />
+          </div>
+          <p className="glass-pill mt-3.5 px-3 py-1 text-[11px] text-cyan-200">
+            Tap anywhere to place the board
+          </p>
         </div>
       )}
 
@@ -900,11 +1177,20 @@ const SceneHost: React.FC<SceneHostProps> = ({
         </div>
       )}
 
-      {/* Gesture hint inside AR. */}
-      {xrActive && placed && (
+      {/* Gesture hint inside AR (both tiers share the same gestures). */}
+      {arActive && placed && (
         <div className="pointer-events-none absolute inset-x-0 top-28 z-30 flex justify-center">
           <div className="glass-pill px-3 py-1 text-[10px] tracking-wide text-cyan-200">
             1 finger to rotate • 2 fingers to scale
+          </div>
+        </div>
+      )}
+
+      {/* Non-blocking notice when AR could not start (permissions, no camera). */}
+      {arNotice && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-44 z-40 flex justify-center px-6">
+          <div className="glass-pill anim-fade-up px-4 py-2 text-[12px] text-rose-200">
+            {arNotice}
           </div>
         </div>
       )}
