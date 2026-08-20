@@ -153,18 +153,21 @@ const PlayerSetup: React.FC<PlayerSetupProps> = ({
             <div className="space-y-2.5">
               <span className="label ml-1 block">Hull</span>
               <div className="grid grid-cols-3 gap-2.5">
-                {AVATAR_OPTIONS.map((opt) => {
+                {AVATAR_OPTIONS.map((opt, i) => {
                   const active = current.avatarId === opt.id;
                   return (
                     <button
                       key={opt.id}
                       type="button"
+                      title={opt.desc}
+                      aria-pressed={active}
                       onClick={() => {
                         sound.playClick();
                         setCurrent({ ...current, avatarId: opt.id as AvatarType });
                       }}
-                      className="press relative flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3 transition-all"
+                      className="press anim-pop relative flex flex-col items-center gap-1.5 rounded-2xl px-1.5 py-3 transition-all"
                       style={{
+                        animationDelay: `${i * 45}ms`,
                         background: active ? rgba(current.color, 0.16) : 'rgba(255,255,255,.04)',
                         boxShadow: active
                           ? `inset 0 0 0 1px ${rgba(current.color, 0.75)}, 0 10px 26px -14px ${rgba(current.color, 0.9)}`
@@ -177,7 +180,7 @@ const PlayerSetup: React.FC<PlayerSetupProps> = ({
                         size={38}
                       />
                       <span
-                        className={`text-[11px] font-semibold ${active ? 'text-white' : 'text-slate-400'}`}
+                        className={`text-[11px] font-semibold leading-none ${active ? 'text-white' : 'text-slate-400'}`}
                       >
                         {opt.label}
                       </span>

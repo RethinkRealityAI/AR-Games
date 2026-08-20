@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { GameCore, GameMode, PlayerProfile, PlayerSlot, Session } from '../types';
-import { AvatarDot, Icon, ThinkingDots, rgba } from './GlassUI';
+import { AvatarDot, ThinkingDots, rgba } from './GlassUI';
 
 const AWAY_AFTER_MS = 10_000;
 
@@ -14,8 +14,6 @@ interface HudProps {
   /** Waiting on the server to echo a move back. */
   pending?: boolean;
   session?: Session | null;
-  /** Shown only when the chat dock has been switched off entirely. */
-  onRestoreChat?: () => void;
 }
 
 const PlayerChip: React.FC<{
@@ -68,7 +66,6 @@ const Hud: React.FC<HudProps> = ({
   aiThinking,
   pending,
   session,
-  onRestoreChat,
 }) => {
   // Tick so `lastSeen` based presence decays without a network event.
   const [, setTick] = useState(0);
@@ -146,17 +143,6 @@ const Hud: React.FC<HudProps> = ({
           <span className="glass-pill shimmer overflow-hidden px-3 py-1 text-[11px] font-medium text-slate-300">
             <span className="relative z-10">Syncing…</span>
           </span>
-        )}
-
-        {onRestoreChat && (
-          <button
-            onClick={onRestoreChat}
-            aria-label="Show chat"
-            className="yes-tap press glass-pill flex items-center gap-1 px-2.5 py-1 text-[11px] text-slate-300"
-          >
-            <Icon name="chat" size={13} />
-            Chat
-          </button>
         )}
       </div>
     </div>

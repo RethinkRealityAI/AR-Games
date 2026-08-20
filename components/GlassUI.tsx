@@ -26,6 +26,9 @@ export const AVATAR_OPTIONS: { id: AvatarType; label: string; desc: string }[] =
   { id: 'ASTRONAUT', label: 'Explorer', desc: 'Suited voyager' },
   { id: 'DRONE', label: 'Sentinel', desc: 'Hovering droid' },
   { id: 'CRYSTAL', label: 'Shard', desc: 'Psionic crystal' },
+  { id: 'ROCKET', label: 'Ranger', desc: 'Retro finned rocket' },
+  { id: 'SATURN', label: 'Ringworld', desc: 'Glossy ringed planet' },
+  { id: 'COMET', label: 'Streak', desc: 'Crystalline comet' },
 ];
 
 /** `#22d3ee` -> `rgba(34,211,238,a)` */
@@ -129,6 +132,64 @@ export const IconButton: React.FC<
 );
 
 /* --------------------------------------------------------------------------
+   Tilt (3D hover lean + cursor-following sheen)
+   -------------------------------------------------------------------------- */
+
+/** Max lean, in degrees, at the very edge of the card. */
+const TILT_MAX = 6.5;
+
+/**
+ * Pointer handlers that write `--tx/--ty/--mx/--my/--lift` straight onto the
+ * node, so the tilt costs no React renders. Pair with the `.tilt` class.
+ * Skipped for coarse pointers (no hover to speak of) and for users who asked
+ * for reduced motion.
+ */
+export function useTilt<T extends HTMLElement>() {
+  const ref = React.useRef<T>(null);
+
+  const enabled = React.useMemo(
+    () =>
+      typeof window !== 'undefined' &&
+      window.matchMedia('(hover: hover) and (pointer: fine)').matches &&
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    [],
+  );
+
+  const set = React.useCallback((vars: Record<string, string>) => {
+    const el = ref.current;
+    if (!el) return;
+    for (const [k, v] of Object.entries(vars)) el.style.setProperty(k, v);
+  }, []);
+
+  const onPointerMove = React.useCallback(
+    (e: React.PointerEvent<T>) => {
+      if (!enabled) return;
+      const el = ref.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width; // 0..1
+      const py = (e.clientY - r.top) / r.height;
+      set({
+        // Lean *toward* the cursor: rotateY follows x, rotateX opposes y.
+        '--ty': `${(px - 0.5) * 2 * TILT_MAX}deg`,
+        '--tx': `${(0.5 - py) * 2 * TILT_MAX}deg`,
+        '--mx': `${px * 100}%`,
+        '--my': `${py * 100}%`,
+        '--lift': '1',
+      });
+    },
+    [enabled, set],
+  );
+
+  const onPointerLeave = React.useCallback(() => {
+    if (!enabled) return;
+    set({ '--tx': '0deg', '--ty': '0deg', '--lift': '0' });
+  }, [enabled, set]);
+
+  return { ref, tiltProps: { onPointerMove, onPointerLeave } };
+}
+
+/* --------------------------------------------------------------------------
    Segmented control
    -------------------------------------------------------------------------- */
 
@@ -193,6 +254,7 @@ export const AvatarGlyph: React.FC<{ type: AvatarType; color: string; size?: num
   color,
   size = 44,
 }) => {
+  const uid = React.useId();
   const common = { width: size, height: size, viewBox: '0 0 48 48' } as const;
   if (type === 'DRONE') {
     return (
@@ -216,6 +278,94 @@ export const AvatarGlyph: React.FC<{ type: AvatarType; color: string; size?: num
         <path d="M24 5 L24 41" stroke={rgba(color, 0.85)} strokeWidth="1" />
         <path d="M11 22 L37 22" stroke={rgba(color, 0.6)} strokeWidth="1" />
         <path d="M24 5 L31 22 L24 41 Z" fill="rgba(255,255,255,.16)" />
+      </svg>
+    );
+  }
+  if (type === 'ROCKET') {
+    return (
+      <svg {...common} aria-hidden>
+        <ellipse cx="24" cy="43" rx="9" ry="2.2" fill={rgba(color, 0.22)} />
+        {/* fins */}
+        <path d="M18 27 L11 37 L18 35 Z" fill={rgba(color, 0.85)} />
+        <path d="M30 27 L37 37 L30 35 Z" fill={rgba(color, 0.85)} />
+        {/* hull */}
+        <path
+          d="M24 4c4.6 4.4 7 10.6 7 17.4 0 5.6-1.2 10.6-3.2 14.6h-7.6C18.2 32 17 27 17 21.4 17 14.6 19.4 8.4 24 4Z"
+          fill="#eef2f8"
+          stroke={rgba(color, 0.7)}
+          strokeWidth="1.4"
+        />
+        <path d="M24 4c4.6 4.4 7 10.6 7 17.4 0 5.6-1.2 10.6-3.2 14.6H24Z" fill="rgba(255,255,255,.55)" />
+        {/* porthole */}
+        <circle cx="24" cy="18" r="3.6" fill="#0d1424" />
+        <circle cx="24" cy="18" r="3.6" fill="none" stroke={color} strokeWidth="1.5" />
+        <circle cx="22.7" cy="16.8" r="1" fill="rgba(255,255,255,.75)" />
+        {/* engine ring + plume */}
+        <ellipse cx="24" cy="37" rx="4.6" ry="1.7" fill="none" stroke={color} strokeWidth="1.6" />
+        <path d="M21.4 38.4c1 3.2 1.9 4.9 2.6 5.6.7-.7 1.6-2.4 2.6-5.6Z" fill={rgba(color, 0.75)} />
+      </svg>
+    );
+  }
+  if (type === 'SATURN') {
+    // The ring is drawn twice around the planet: the full ellipse behind it,
+    // then only the near (lower) half on top, so the ring reads as passing
+    // through the planet rather than around it.
+    // React's useId is wrapped in colons, which are legal in an id but awkward
+    // in a url(#…) reference — strip them.
+    const gid = `sat-${uid.replace(/:/g, '')}`;
+    return (
+      <svg {...common} aria-hidden>
+        <defs>
+          <radialGradient id={gid} cx="0.32" cy="0.26" r="0.86">
+            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.72" />
+            <stop offset="46%" stopColor="#ffffff" stopOpacity="0.08" />
+            <stop offset="100%" stopColor="#020617" stopOpacity="0.55" />
+          </radialGradient>
+        </defs>
+        <ellipse cx="24" cy="43" rx="10" ry="2.2" fill={rgba(color, 0.2)} />
+        {/* full ring, behind */}
+        <ellipse
+          cx="24"
+          cy="23"
+          rx="17"
+          ry="5.5"
+          fill="none"
+          stroke={rgba(color, 0.45)}
+          strokeWidth="2.4"
+          transform="rotate(-18 24 23)"
+        />
+        {/* planet */}
+        <circle cx="24" cy="21" r="10.5" fill={rgba(color, 0.55)} />
+        <circle cx="24" cy="21" r="10.5" fill={`url(#${gid})`} stroke={rgba(color, 0.9)} strokeWidth="1.3" />
+        {/* banding */}
+        <path d="M15 18h18M16 24.5h16" stroke={rgba(color, 0.4)} strokeWidth="1.2" />
+        {/* near half of the ring, in front */}
+        <path
+          d="M40.2 17.8 A 17 5.5 -18 0 1 7.8 28.3"
+          fill="none"
+          stroke={color}
+          strokeWidth="2.6"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+  if (type === 'COMET') {
+    return (
+      <svg {...common} aria-hidden>
+        <ellipse cx="30" cy="43" rx="8" ry="2" fill={rgba(color, 0.18)} />
+        {/* swept tail: one broad wedge, one bright core streak */}
+        <path d="M31 17 L4 41 L17 41 Z" fill={rgba(color, 0.26)} />
+        <path d="M30 19 L12 41 L21 41 Z" fill={rgba(color, 0.6)} />
+        {/* sparks trailing off */}
+        <circle cx="14" cy="33" r="1.5" fill={color} opacity=".9" />
+        <circle cx="9" cy="38" r="1.1" fill={color} opacity=".6" />
+        <circle cx="20" cy="36" r="1" fill={color} opacity=".75" />
+        {/* crystalline core */}
+        <path d="M32 5 L42 17 L32 30 L22 17 Z" fill={rgba(color, 0.5)} stroke={color} strokeWidth="1.6" />
+        <path d="M32 5 L37 17 L32 30 Z" fill="rgba(255,255,255,.42)" />
+        <path d="M22 17 L42 17" stroke={rgba(color, 0.8)} strokeWidth="1.1" />
+        <circle cx="32" cy="17" r="3" fill="rgba(255,255,255,.9)" />
       </svg>
     );
   }
@@ -291,7 +441,9 @@ const PATHS: Record<IconName, React.ReactNode> = {
   chat: (
     <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.9 9.9 0 01-4-.8l-4 1.6 1.2-3.6A7.6 7.6 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
   ),
-  send: <path d="M4 12l16-8-6 8 6 8-16-8z" />,
+  // Paper plane pointing right — the old path was mirrored, so "send" read as
+  // a back arrow.
+  send: <path d="M20 12L4 4l6 8-6 8 16-8z" />,
   copy: (
     <path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2v-2m-8-2h8a2 2 0 002-2V5a2 2 0 00-2-2H10a2 2 0 00-2 2v8a2 2 0 002 2z" />
   ),
