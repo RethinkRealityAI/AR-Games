@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { GAME_LIST } from '../games/registry';
 import type { GameId } from '../types';
-import { AuroraBackground, Icon, rgba } from './GlassUI';
+import { AuroraBackground, Icon, rgba, useTilt } from './GlassUI';
 import { sound } from '../services/sound';
 
 /**
@@ -83,13 +83,90 @@ const CARD_TINT: Record<GameId, [string, string]> = {
   chess: ['#fbbf24', '#7c3aed'],
 };
 
+/**
+ * One game card. Its own component so each can own a `useTilt` instance —
+ * hooks cannot live inside the `.map()`.
+ */
+const GameCard: React.FC<{
+  game: (typeof GAME_LIST)[number];
+  index: number;
+  onPick: (id: GameId) => void;
+}> = ({ game, index, onPick }) => {
+  const { ref, tiltProps } = useTilt<HTMLButtonElement>();
+  const [c1, c2] = CARD_TINT[game.meta.id];
+
+  return (
+    // The entrance animation lives on the wrapper: it animates `transform`
+    // with fill-mode both, which would otherwise permanently pin the tilt.
+    <div className="anim-card-in h-full" style={{ animationDelay: `${120 + index * 110}ms` }}>
+    <button
+      ref={ref}
+      {...tiltProps}
+      onClick={() => {
+        sound.resume();
+        sound.playStart();
+        onPick(game.meta.id);
+      }}
+      className="glass tilt group relative block h-full w-full overflow-hidden rounded-[24px] text-left"
+    >
+      <div className="relative h-40 overflow-hidden sm:h-44">
+        <div
+          className="absolute inset-0 transition-transform duration-500 group-hover:scale-105"
+          style={{
+            background:
+              `radial-gradient(120% 130% at 20% 10%, ${rgba(c1, 0.6)}, transparent 60%),` +
+              `radial-gradient(120% 130% at 85% 90%, ${rgba(c2, 0.55)}, transparent 62%),` +
+              'linear-gradient(150deg,#0a1130,#080816)',
+          }}
+        />
+        <ArtLayer
+          src={game.meta.cardArt}
+          alt={game.meta.name}
+          className="opacity-80 transition-transform duration-500 group-hover:scale-105"
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            background: 'linear-gradient(180deg, rgba(3,4,14,0) 35%, rgba(3,4,14,.9) 100%)',
+          }}
+        />
+        <div
+          className="anim-float absolute right-4 top-4 h-16 w-16 opacity-70 sm:h-20 sm:w-20"
+          style={{ color: c1 }}
+        >
+          {GAME_GLYPH[game.meta.id]}
+        </div>
+      </div>
+
+      <div className="relative flex items-end justify-between gap-3 px-5 pb-5 pt-4">
+        <div className="min-w-0">
+          <h3 className="font-display text-xl font-bold tracking-tight text-white">
+            {game.meta.name}
+          </h3>
+          <p className="mt-1 text-[13px] leading-snug text-slate-400">{game.meta.tagline}</p>
+        </div>
+        <span
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-full transition-transform duration-300 group-hover:translate-x-0.5"
+          style={{
+            background: `linear-gradient(135deg, ${rgba(c1, 0.9)}, ${rgba(c2, 0.9)})`,
+            color: '#050510',
+          }}
+        >
+          <Icon name="back" size={18} className="rotate-180" />
+        </span>
+      </div>
+    </button>
+    </div>
+  );
+};
+
 const Landing: React.FC<{ onPickGame: (id: GameId) => void }> = ({ onPickGame }) => (
   <div className="relative h-full overflow-y-auto overflow-x-hidden">
     <AuroraBackground />
 
     <div className="relative z-10 mx-auto flex min-h-full w-full max-w-5xl flex-col px-5 pb-10 pt-8 sm:px-8 sm:pt-12">
       {/* ---------------------------------------------------------------- hero */}
-      <header className="anim-fade-up relative overflow-hidden rounded-[28px]">
+      <header className="anim-fade-in relative overflow-hidden rounded-[28px]">
         <div
           className="absolute inset-0"
           style={{
@@ -106,26 +183,40 @@ const Landing: React.FC<{ onPickGame: (id: GameId) => void }> = ({ onPickGame })
           style={{ background: 'linear-gradient(180deg, rgba(5,5,16,.15) 20%, rgba(5,5,16,.82) 100%)' }}
         />
 
+        {/* Cascade: eyebrow, wordmark, blurb, then the mode pills. */}
         <div className="relative px-6 py-12 text-center sm:px-12 sm:py-16">
-          <span className="glass-pill inline-flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">
+          <span
+            className="glass-pill anim-fade-up inline-flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200"
+            style={{ animationDelay: '40ms' }}
+          >
             <Icon name="sparkle" size={12} />
             AR arcade
           </span>
 
-          <h1 className="text-glow mt-5 font-display text-[2.6rem] font-bold leading-[0.92] tracking-[-0.045em] sm:text-7xl">
+          <h1
+            className="text-glow anim-fade-up mt-5 font-display text-[2.6rem] font-bold leading-[0.92] tracking-[-0.045em] sm:text-7xl"
+            style={{ animationDelay: '120ms' }}
+          >
             <span className="text-gradient">COSMIC</span>
             <br />
             <span className="text-gradient">ARCADE</span>
           </h1>
 
-          <p className="mx-auto mt-5 max-w-md text-sm leading-relaxed text-slate-300 sm:text-base">
+          <p
+            className="anim-fade-up mx-auto mt-5 max-w-md text-sm leading-relaxed text-slate-300 sm:text-base"
+            style={{ animationDelay: '240ms' }}
+          >
             Tabletop games rebuilt as holograms. Place a board on your desk in AR, or spin the
             holo-table right here — solo against the machine, side-by-side, or across the galaxy.
           </p>
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-[11px] text-slate-400">
-            {['Solo vs AI', 'Pass & Play', 'Online Match'].map((t) => (
-              <span key={t} className="glass-pill px-3 py-1.5 font-medium text-slate-200">
+            {['Solo vs AI', 'Pass & Play', 'Online Match'].map((t, i) => (
+              <span
+                key={t}
+                className="glass-pill anim-fade-up px-3 py-1.5 font-medium text-slate-200"
+                style={{ animationDelay: `${330 + i * 70}ms` }}
+              >
                 {t}
               </span>
             ))}
@@ -137,71 +228,9 @@ const Landing: React.FC<{ onPickGame: (id: GameId) => void }> = ({ onPickGame })
       <section className="mt-9">
         <h2 className="label mb-3 ml-1">Choose your game</h2>
         <div className="grid gap-4 sm:grid-cols-2">
-          {GAME_LIST.map((game, i) => {
-            const [c1, c2] = CARD_TINT[game.meta.id];
-            return (
-              <button
-                key={game.meta.id}
-                onClick={() => {
-                  sound.resume();
-                  sound.playStart();
-                  onPickGame(game.meta.id);
-                }}
-                className="glass press anim-fade-up group relative overflow-hidden rounded-[24px] text-left"
-                style={{ animationDelay: `${90 + i * 90}ms` }}
-              >
-                <div className="relative h-40 overflow-hidden sm:h-44">
-                  <div
-                    className="absolute inset-0 transition-transform duration-500 group-hover:scale-105"
-                    style={{
-                      background:
-                        `radial-gradient(120% 130% at 20% 10%, ${rgba(c1, 0.6)}, transparent 60%),` +
-                        `radial-gradient(120% 130% at 85% 90%, ${rgba(c2, 0.55)}, transparent 62%),` +
-                        'linear-gradient(150deg,#0a1130,#080816)',
-                    }}
-                  />
-                  <ArtLayer
-                    src={game.meta.cardArt}
-                    alt={game.meta.name}
-                    className="opacity-80 transition-transform duration-500 group-hover:scale-105"
-                  />
-                  <div
-                    className="absolute inset-0"
-                    style={{
-                      background:
-                        'linear-gradient(180deg, rgba(3,4,14,0) 35%, rgba(3,4,14,.9) 100%)',
-                    }}
-                  />
-                  <div
-                    className="anim-float absolute right-4 top-4 h-16 w-16 opacity-70 sm:h-20 sm:w-20"
-                    style={{ color: c1 }}
-                  >
-                    {GAME_GLYPH[game.meta.id]}
-                  </div>
-                </div>
-
-                <div className="relative flex items-end justify-between gap-3 px-5 pb-5 pt-4">
-                  <div className="min-w-0">
-                    <h3 className="font-display text-xl font-bold tracking-tight text-white">
-                      {game.meta.name}
-                    </h3>
-                    <p className="mt-1 text-[13px] leading-snug text-slate-400">
-                      {game.meta.tagline}
-                    </p>
-                  </div>
-                  <span
-                    className="grid h-10 w-10 shrink-0 place-items-center rounded-full transition-transform duration-300 group-hover:translate-x-0.5"
-                    style={{
-                      background: `linear-gradient(135deg, ${rgba(c1, 0.9)}, ${rgba(c2, 0.9)})`,
-                      color: '#050510',
-                    }}
-                  >
-                    <Icon name="back" size={18} className="rotate-180" />
-                  </span>
-                </div>
-              </button>
-            );
-          })}
+          {GAME_LIST.map((game, i) => (
+            <GameCard key={game.meta.id} game={game} index={i} onPick={onPickGame} />
+          ))}
         </div>
       </section>
 

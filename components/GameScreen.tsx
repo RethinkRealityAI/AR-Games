@@ -22,6 +22,19 @@ import type {
 const AI_DELAY_MS = 650;
 const HANDOFF_MS = 1200;
 
+/**
+ * Feature-guarded haptic tick. Absent on iOS Safari and on desktop, and a
+ * no-op behind a permissions policy — hence the try/catch rather than a
+ * capability assertion.
+ */
+function haptic(pattern: number | number[]): void {
+  try {
+    navigator.vibrate?.(pattern);
+  } catch {
+    /* vibration blocked or unsupported — never worth failing a move over */
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Local game state (modes 'ai' and 'local')
 // ---------------------------------------------------------------------------
@@ -107,7 +120,6 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const [arActive, setArActive] = useState(false);
   const [placed, setPlaced] = useState(true);
   const [repositionNonce, setRepositionNonce] = useState(0);
-  const [chatHidden, setChatHidden] = useState(false);
   const [handoff, setHandoff] = useState<PlayerSlot | null>(null);
   const [confirmExit, setConfirmExit] = useState(false);
 
@@ -243,6 +255,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
     // Connect Four plays its own "thock" when the disc actually lands.
     if (gameId !== 'connect4') sound.playMove();
+    haptic(12);
 
     if (core.winner === 'DRAW') sound.playDraw();
     else if (core.winner !== null) {
@@ -250,6 +263,8 @@ const GameScreen: React.FC<GameScreenProps> = ({
         (mode === 'ai' && core.winner === 1) || (online && mySlot !== null && core.winner !== mySlot);
       if (iLost) sound.playLose();
       else sound.playWin();
+      // Triple tap on a win, one longer buzz on a loss.
+      haptic(iLost ? 40 : [18, 45, 18, 45, 26]);
     } else if (mode === 'local') {
       setHandoff(core.currentSlot);
     }
@@ -340,7 +355,6 @@ const GameScreen: React.FC<GameScreenProps> = ({
         aiThinking={aiThinking}
         pending={pending}
         session={session}
-        onRestoreChat={online && chatHidden ? () => setChatHidden(false) : undefined}
       />
 
       {/* ------------------------------------------------------- controls */}
@@ -403,14 +417,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
       )}
 
       {/* ------------------------------------------------------------ chat */}
-      {online && (
-        <ChatDock
-          mySlot={mySlot}
-          profiles={activeProfiles}
-          hidden={chatHidden}
-          onHiddenChange={setChatHidden}
-        />
-      )}
+      {online && <ChatDock mySlot={mySlot} profiles={activeProfiles} />}
 
       {/* --------------------------------------------------------- outcome */}
       {winner !== null && (
