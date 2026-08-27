@@ -436,7 +436,13 @@ export function createMemoryScene(): GameScene {
     rows = b.rows;
     theme = b.theme;
     // Largest square pitch that keeps the whole grid inside the footprint.
-    step = Math.min(S / cols, S / rows);
+    // Fit every board shape to the same on-screen footprint. Sizing purely by
+    // `min(S/cols, S/rows)` left the wide, shallow Skirmish grid floating small
+    // inside the camera's fixed framing while Odyssey nearly filled it; matching
+    // each grid's half-diagonal instead makes all three read at one scale. The
+    // second term stops a very wide board overflowing the nominal footprint.
+    const diagCells = Math.hypot(cols - 1, rows - 1) || 1;
+    step = Math.min((2 * S * 0.52) / diagCells, S / Math.max(cols - 1, 1));
     tile = step * 0.9;
     slabH = tile * 0.17;
     // buildArtifact fits a `size` cube, so this is the artifact's full height:

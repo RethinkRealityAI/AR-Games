@@ -27,5 +27,5 @@ dist-ssr
 
 # local verification harnesses (hardcode sandbox paths)
 /integration-smoke.mjs
-/qp-smoke.mjs
+/qp-*.mjs
 dist-test/
