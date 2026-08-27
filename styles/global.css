@@ -1099,6 +1099,49 @@ textarea:focus-visible {
   }
 }
 
+/* --------------------------------------------------------------------------
+   QUANTUM PAIRS — Nova Pulse discharge + the urgent end of the turn clock.
+   Both are transform/opacity/filter only. See components/QuantumHud.tsx.
+   -------------------------------------------------------------------------- */
+
+.nova-fired {
+  animation: nova-fire 620ms var(--ease) 1;
+}
+
+@keyframes nova-fire {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  22% {
+    transform: scale(1.42);
+    filter: brightness(2.4) saturate(1.4);
+  }
+  60% {
+    transform: scale(0.94);
+    filter: brightness(1.1);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+/* Last few seconds: a calm ring starts breathing. */
+.timer-urgent {
+  animation: timer-urgent 900ms ease-in-out infinite;
+}
+
+@keyframes timer-urgent {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.09);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

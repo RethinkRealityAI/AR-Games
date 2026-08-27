@@ -67,6 +67,11 @@ const OptionCard: React.FC<{
   </div>
 );
 
+/** Per-game blurbs for the AI card, where the flavour differs most. */
+const AI_BLURB: Partial<Record<GameId, string>> = {
+  memory: 'NOVA remembers what it has seen — and it plays the opener too.',
+};
+
 const ModeSelect: React.FC<ModeSelectProps> = ({
   gameId,
   difficulty,
@@ -91,6 +96,21 @@ const ModeSelect: React.FC<ModeSelectProps> = ({
             {meta.name}
           </h1>
           <p className="mt-2 text-sm text-slate-400">{meta.tagline}</p>
+          {gameId === 'memory' && (
+            <div className="mt-3.5 flex flex-wrap items-center justify-center gap-1.5">
+              {['3 board sizes', '3 artifact sets', 'Optional turn clock', 'Nova Pulse'].map(
+                (t, i) => (
+                  <span
+                    key={t}
+                    className="glass-pill anim-fade-up px-2.5 py-1 text-[10px] font-semibold text-slate-300"
+                    style={{ animationDelay: `${60 + i * 60}ms` }}
+                  >
+                    {t}
+                  </span>
+                ),
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col gap-3.5">
@@ -99,7 +119,9 @@ const ModeSelect: React.FC<ModeSelectProps> = ({
             delay={60}
             icon={<Icon name="cpu" size={22} />}
             title="Solo vs AI"
-            blurb="Face the on-device engine. Instant, offline, ruthless on hard."
+            blurb={
+              AI_BLURB[gameId] ?? 'Face the on-device engine. Instant, offline, ruthless on hard.'
+            }
             onClick={() => onPick('ai')}
           >
             <div className="flex items-center justify-between gap-3">

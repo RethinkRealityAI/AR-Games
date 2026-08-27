@@ -29,6 +29,12 @@ interface PlayerSetupProps {
   mode: GameMode;
   /** Headline context, e.g. the game name or "Joining ABC123". */
   contextLabel?: string;
+  /**
+   * Footnote under the card. Games decide the truth here — Quantum Pairs, for
+   * one, settles the first move with a rock-paper-scissors opener rather than
+   * handing it to the human.
+   */
+  footnote?: string | null;
   initial?: [PlayerProfile, PlayerProfile];
   onComplete: (profiles: [PlayerProfile, PlayerProfile]) => void;
   onBack: () => void;
@@ -37,6 +43,7 @@ interface PlayerSetupProps {
 const PlayerSetup: React.FC<PlayerSetupProps> = ({
   mode,
   contextLabel,
+  footnote,
   initial = DEFAULT_PROFILES,
   onComplete,
   onBack,
@@ -206,9 +213,9 @@ const PlayerSetup: React.FC<PlayerSetupProps> = ({
           </GlassButton>
         </form>
 
-        {mode === 'ai' && (
+        {(footnote || mode === 'ai') && (
           <p className="mt-5 text-center text-[11px] text-slate-500">
-            You play first. NOVA answers on the other side of the table.
+            {footnote ?? 'You play first. NOVA answers on the other side of the table.'}
           </p>
         )}
         </div>

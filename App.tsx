@@ -134,6 +134,11 @@ const App: React.FC = () => {
         <PlayerSetup
           mode={mode}
           contextLabel={setupContext}
+          footnote={
+            gameId === 'memory'
+              ? 'Next: set the table, then win the rock-paper-scissors opener to move first.'
+              : null
+          }
           initial={[profiles[0], p2Memory]}
           onComplete={finishSetup}
           onBack={() => setView(joinCode ? 'landing' : 'mode')}
