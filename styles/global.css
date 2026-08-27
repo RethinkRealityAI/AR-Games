@@ -1,0 +1,1166 @@
+/* ==========================================================================
+   COSMIC ARCADE — design system
+   Tailwind v4 (via @tailwindcss/vite) + liquid-glass tokens & utilities.
+   ========================================================================== */
+
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --color-void: #050510;
+  --color-void-2: #0b0b22;
+  --color-neon-cyan: #22d3ee;
+  --color-neon-violet: #8b5cf6;
+  --color-neon-magenta: #e879f9;
+  --color-neon-gold: #fcd34d;
+}
+
+/* --------------------------------------------------------------------------
+   Tokens
+   -------------------------------------------------------------------------- */
+
+:root {
+  --bg: #050510;
+  --bg-2: #0b0b22;
+
+  --accent: #22d3ee;
+  --accent-2: #8b5cf6;
+  --accent-3: #e879f9;
+  --gold: #fcd34d;
+
+  --ink: #f1f5f9;
+  --ink-dim: #94a3b8;
+  --ink-faint: #64748b;
+
+  /* liquid glass recipe */
+  --glass-bg: rgba(15, 23, 42, 0.55);
+  --glass-bg-strong: rgba(15, 23, 42, 0.78);
+  --glass-blur: blur(24px) saturate(1.4);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  --glass-shadow: 0 18px 50px -12px rgba(2, 6, 23, 0.75);
+
+  --radius: 20px;
+
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  /* overshoot on release — used by every pressable surface */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur: 220ms;
+}
+
+/* --------------------------------------------------------------------------
+   Base
+   -------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  background: var(--bg);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  position: relative;
+  isolation: isolate;
+}
+
+/* When a WebXR session owns the compositor, every layer must be see-through. */
+html.xr-active,
+html.xr-active body,
+html.xr-active #root {
+  background: transparent !important;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+  margin: 0;
+  font-weight: 700;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.55);
+}
+
+::selection {
+  background: rgba(34, 211, 238, 0.32);
+}
+
+/* One focus treatment everywhere, on keyboard focus only: an accent outline.
+   Deliberately outline-only — every glass surface already spends its
+   box-shadow budget on the glass recipe, so a ring drawn there would either
+   be overridden or wipe out the surface. Radius is inherited, so pills and
+   the comms orb get a round ring for free. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* Fields already brighten their own border on focus, so keep the ring tight —
+   otherwise the autofocused chat composer reads as an error state. */
+input:focus-visible,
+textarea:focus-visible {
+  outline-width: 1.5px;
+  outline-offset: 1px;
+}
+
+/* --------------------------------------------------------------------------
+   Liquid glass utilities
+   -------------------------------------------------------------------------- */
+
+.glass,
+.glass-strong,
+.glass-pill {
+  position: relative;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-inset), var(--glass-shadow);
+  border-radius: var(--radius);
+}
+
+.glass-strong {
+  background: var(--glass-bg-strong);
+}
+
+.glass-pill {
+  border-radius: 999px;
+}
+
+/* 1px gradient border (top-light specular) drawn as a mask ring so it never
+   affects layout and survives border-radius. */
+.glass::before,
+.glass-strong::before,
+.glass-pill::before,
+.glass-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.42) 0%,
+    rgba(255, 255, 255, 0.1) 28%,
+    rgba(255, 255, 255, 0.02) 58%,
+    rgba(34, 211, 238, 0.24) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* interactive glass button ------------------------------------------------ */
+
+.glass-btn {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border-radius: 14px;
+  padding: 0.75rem 1.15rem;
+  font-weight: 600;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-inset), 0 10px 28px -14px rgba(2, 6, 23, 0.9);
+  /* Spring easing on release, snappy linear-ish easing on the way down. */
+  transition: transform 260ms var(--ease-spring), box-shadow var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+  will-change: transform;
+}
+
+.glass-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: rgba(30, 41, 59, 0.6);
+  box-shadow: var(--glass-inset), 0 20px 40px -16px rgba(34, 211, 238, 0.4);
+}
+
+.glass-btn:active:not(:disabled) {
+  transform: scale(0.955);
+  transition-duration: 90ms;
+  transition-timing-function: var(--ease);
+}
+
+.glass-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* specular sweep on hover */
+.glass-btn::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -60%;
+  width: 45%;
+  background: linear-gradient(
+    100deg,
+    transparent,
+    rgba(255, 255, 255, 0.28),
+    transparent
+  );
+  transform: skewX(-18deg);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.glass-btn:hover:not(:disabled)::after {
+  animation: sweep 750ms var(--ease);
+}
+
+@keyframes sweep {
+  0% {
+    left: -60%;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    left: 125%;
+    opacity: 0;
+  }
+}
+
+.glass-btn-primary {
+  background: linear-gradient(
+    135deg,
+    rgba(34, 211, 238, 0.9),
+    rgba(139, 92, 246, 0.92)
+  );
+  color: #04040f;
+  font-weight: 700;
+}
+
+.glass-btn-primary:hover:not(:disabled) {
+  background: linear-gradient(
+    135deg,
+    rgba(56, 224, 248, 0.96),
+    rgba(160, 118, 250, 0.98)
+  );
+  box-shadow: var(--glass-inset), 0 22px 46px -14px rgba(139, 92, 246, 0.6);
+}
+
+.glass-btn-danger {
+  background: rgba(127, 29, 29, 0.42);
+  color: #fecaca;
+}
+
+.glass-btn-danger:hover:not(:disabled) {
+  background: rgba(153, 27, 27, 0.55);
+  box-shadow: var(--glass-inset), 0 20px 40px -16px rgba(239, 68, 68, 0.45);
+}
+
+/* --------------------------------------------------------------------------
+   Text treatments
+   -------------------------------------------------------------------------- */
+
+.text-glow {
+  text-shadow: 0 0 18px rgba(34, 211, 238, 0.55), 0 0 44px rgba(139, 92, 246, 0.35);
+}
+
+.text-gradient {
+  background: linear-gradient(120deg, #ffffff 0%, #a5f3fc 42%, #c4b5fd 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(165, 243, 252, 0.75);
+}
+
+.mono {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+/* --------------------------------------------------------------------------
+   Aurora / nebula background (cheap: transform + opacity only)
+   -------------------------------------------------------------------------- */
+
+.aurora {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: radial-gradient(120% 90% at 50% 105%, #131338 0%, var(--bg) 62%);
+}
+
+.aurora-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.55;
+  will-change: transform;
+}
+
+.aurora-blob.b1 {
+  width: 62vmax;
+  height: 62vmax;
+  left: -18vmax;
+  top: -20vmax;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.55), transparent 62%);
+  animation: drift1 26s ease-in-out infinite;
+}
+
+.aurora-blob.b2 {
+  width: 58vmax;
+  height: 58vmax;
+  right: -20vmax;
+  top: 8vmax;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.6), transparent 64%);
+  animation: drift2 32s ease-in-out infinite;
+}
+
+.aurora-blob.b3 {
+  width: 52vmax;
+  height: 52vmax;
+  left: 18vmax;
+  bottom: -26vmax;
+  background: radial-gradient(circle, rgba(232, 121, 249, 0.42), transparent 66%);
+  animation: drift3 38s ease-in-out infinite;
+}
+
+@keyframes drift1 {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(9vmax, 6vmax, 0) scale(1.14);
+  }
+}
+@keyframes drift2 {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1.06);
+  }
+  50% {
+    transform: translate3d(-11vmax, 8vmax, 0) scale(0.9);
+  }
+}
+@keyframes drift3 {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(0.94);
+  }
+  50% {
+    transform: translate3d(7vmax, -9vmax, 0) scale(1.18);
+  }
+}
+
+/* tiny CSS starfield: three box-shadow star sheets scrolling slowly */
+.starfield {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  opacity: 0.85;
+}
+
+.starfield i {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  border-radius: 50%;
+  background: transparent;
+  will-change: transform;
+}
+
+.starfield i:nth-child(1) {
+  box-shadow: 14vw 12vh 0 0.5px #fff, 38vw 62vh 0 0.5px #cffafe,
+    71vw 22vh 0 0.5px #fff, 88vw 74vh 0 0.5px #ddd6fe, 52vw 88vh 0 0.5px #fff,
+    24vw 41vh 0 0.5px #fff, 63vw 51vh 0 0.5px #a5f3fc, 5vw 78vh 0 0.5px #fff,
+    92vw 38vh 0 0.5px #fff, 44vw 15vh 0 0.5px #fbcfe8;
+  animation: twinkle 4.5s ease-in-out infinite;
+}
+
+.starfield i:nth-child(2) {
+  box-shadow: 8vw 55vh 0 1px #fff, 29vw 28vh 0 1px #fff, 57vw 71vh 0 1px #c4b5fd,
+    77vw 46vh 0 1px #fff, 96vw 60vh 0 1px #fff, 35vw 90vh 0 1px #a5f3fc,
+    67vw 8vh 0 1px #fff, 18vw 68vh 0 1px #fff;
+  animation: twinkle 7s ease-in-out infinite reverse;
+}
+
+.starfield i:nth-child(3) {
+  box-shadow: 3vw 30vh 0 0 #fff, 21vw 6vh 0 0 #fff, 47vw 44vh 0 0 #fff,
+    60vw 95vh 0 0 #fff, 83vw 12vh 0 0 #fff, 99vw 85vh 0 0 #fff,
+    12vw 96vh 0 0 #fff, 73vw 66vh 0 0 #fff, 40vw 33vh 0 0 #fff;
+  animation: twinkle 11s ease-in-out infinite;
+}
+
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* deep-space backdrop used behind the 3D game view */
+.game-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(90% 70% at 50% 42%, #12123a 0%, #07071a 45%, #030308 100%);
+}
+
+/* --------------------------------------------------------------------------
+   Motion helpers
+   -------------------------------------------------------------------------- */
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes spring-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 26px, 0) scale(0.94);
+  }
+  62% {
+    opacity: 1;
+    transform: translate3d(0, -4px, 0) scale(1.012);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+  70% {
+    transform: scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes ring-pulse {
+  0% {
+    box-shadow: 0 0 0 0 var(--pulse, rgba(34, 211, 238, 0.6));
+  }
+  70% {
+    box-shadow: 0 0 0 9px rgba(34, 211, 238, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 211, 238, 0);
+  }
+}
+
+@keyframes shimmer-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(230%);
+  }
+}
+
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes phone-scan {
+  0% {
+    transform: translateX(-18px) rotate(-9deg);
+  }
+  50% {
+    transform: translateX(18px) rotate(9deg);
+  }
+  100% {
+    transform: translateX(-18px) rotate(-9deg);
+  }
+}
+
+@keyframes dots {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+.anim-fade-up {
+  animation: fade-up 420ms var(--ease) both;
+}
+.anim-fade-in {
+  animation: fade-in 320ms var(--ease) both;
+}
+.anim-spring {
+  animation: spring-in 420ms var(--ease) both;
+}
+.anim-pop {
+  animation: pop-in 260ms var(--ease) both;
+}
+.anim-float {
+  animation: float-y 5.5s ease-in-out infinite;
+}
+/* Staggered card entrance: rises, over-shoots a hair, settles. */
+.anim-card-in {
+  animation: card-in 620ms var(--ease-spring) both;
+}
+@keyframes card-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 26px, 0) scale(0.965);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+.phone-anim {
+  animation: phone-scan 3s ease-in-out infinite;
+}
+
+.shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.16),
+    transparent
+  );
+  animation: shimmer-slide 1.8s linear infinite;
+}
+
+.pulse-ring {
+  animation: ring-pulse 1.9s var(--ease) infinite;
+}
+
+.dot-1 {
+  animation: dots 1.2s ease-in-out infinite;
+}
+.dot-2 {
+  animation: dots 1.2s ease-in-out 0.16s infinite;
+}
+.dot-3 {
+  animation: dots 1.2s ease-in-out 0.32s infinite;
+}
+
+/* Press-down, spring back out. */
+.press {
+  transition: transform 260ms var(--ease-spring);
+  will-change: transform;
+}
+.press:active {
+  transform: scale(0.955);
+  transition-duration: 90ms;
+  transition-timing-function: var(--ease);
+}
+
+.no-tap {
+  pointer-events: none;
+}
+.yes-tap {
+  pointer-events: auto;
+}
+
+/* --------------------------------------------------------------------------
+   COMMS ORB — floating liquid-glass ball, bottom-right, safe-area aware.
+
+   Structure (see components/ChatDock.tsx):
+     .chat-orb          fixed hit target; owns hover/press scale + focus ring
+       .chat-orb__ball  the glass sphere; owns the idle float + the glow
+         .chat-orb__halo  breathing accent bloom behind the sphere
+         .chat-orb__ping  one-shot ring burst on an incoming message
+       .chat-orb__glyph the icon
+       .chat-orb__badge unread count
+
+   The float lives on the inner ball so the button is free to animate its own
+   transform for hover/press without the two fighting. Everything animated is
+   transform/opacity only.
+   -------------------------------------------------------------------------- */
+
+.chat-orb {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1.15rem, env(safe-area-inset-bottom));
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+  width: 60px;
+  height: 60px;
+  padding: 0;
+  border-radius: 50%;
+  color: #eaf8ff;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 300ms var(--ease-spring);
+  will-change: transform;
+}
+
+@media (min-width: 640px) {
+  .chat-orb {
+    right: max(1.25rem, env(safe-area-inset-right));
+    bottom: max(1.25rem, env(safe-area-inset-bottom));
+    width: 64px;
+    height: 64px;
+  }
+}
+
+.chat-orb:hover {
+  transform: scale(1.07);
+}
+.chat-orb:active {
+  transform: scale(0.9);
+  transition-duration: 90ms;
+  transition-timing-function: var(--ease);
+}
+
+/* the glass sphere ------------------------------------------------------- */
+.chat-orb__ball {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: 50%;
+  /* Light source top-left: a broad specular sheen, an accent bounce from the
+     lower right, then the dark glass body underneath. */
+  background:
+    radial-gradient(
+      82% 82% at 27% 19%,
+      rgba(255, 255, 255, 0.5) 0%,
+      rgba(255, 255, 255, 0.13) 30%,
+      rgba(255, 255, 255, 0) 54%
+    ),
+    radial-gradient(110% 110% at 80% 96%, var(--orb-tint, rgba(34, 211, 238, 0.22)) 0%, rgba(255, 255, 255, 0) 60%),
+    linear-gradient(163deg, rgba(112, 158, 226, 0.32) 0%, rgba(12, 17, 40, 0.6) 46%, rgba(4, 6, 20, 0.8) 100%);
+  backdrop-filter: blur(20px) saturate(1.7);
+  -webkit-backdrop-filter: blur(20px) saturate(1.7);
+  box-shadow:
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.6),
+    inset 0 -10px 18px -12px rgba(255, 255, 255, 0.32),
+    inset 0 0 20px -6px var(--orb-glow, rgba(34, 211, 238, 0.5)),
+    0 14px 30px -12px rgba(2, 6, 23, 0.95),
+    0 0 20px -3px var(--orb-glow, rgba(34, 211, 238, 0.5)),
+    0 0 56px -12px var(--orb-glow-far, rgba(34, 211, 238, 0.28));
+  animation: orb-float 5.6s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* thin luminous rim: white at the light source, accent at the shadow side */
+.chat-orb__ball::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  padding: 1px;
+  background: linear-gradient(
+    158deg,
+    rgba(255, 255, 255, 0.85) 0%,
+    rgba(255, 255, 255, 0.22) 26%,
+    rgba(255, 255, 255, 0.04) 52%,
+    var(--orb-rim, rgba(34, 211, 238, 0.55)) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* tight specular glint, top-left */
+.chat-orb__ball::after {
+  content: "";
+  position: absolute;
+  top: 15%;
+  left: 17%;
+  width: 34%;
+  height: 24%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0) 68%);
+  filter: blur(2.5px);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* breathing accent bloom behind the sphere */
+.chat-orb__halo {
+  position: absolute;
+  inset: -9px;
+  z-index: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    var(--orb-glow, rgba(34, 211, 238, 0.5)) 0%,
+    var(--orb-glow-far, rgba(34, 211, 238, 0.28)) 42%,
+    rgba(255, 255, 255, 0) 72%
+  );
+  filter: blur(7px);
+  opacity: 0.7;
+  animation: orb-breathe 4.2s ease-in-out infinite;
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+
+/* one-shot ring burst, armed by .chat-orb--ping */
+.chat-orb__ping {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--orb-rim, rgba(34, 211, 238, 0.55));
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* While the sheet is open the orb is just a collapse control — pull the bloom
+   back so it stops competing with the panel for attention. */
+.chat-orb--open .chat-orb__halo {
+  opacity: 0.28;
+}
+
+.chat-orb--ping .chat-orb__ping {
+  animation: orb-ping 900ms var(--ease) 1;
+}
+.chat-orb--ping .chat-orb__halo {
+  animation: orb-breathe 4.2s ease-in-out infinite, orb-flare 900ms var(--ease) 1;
+}
+
+.chat-orb__glyph {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  filter: drop-shadow(0 1px 3px rgba(2, 6, 23, 0.8));
+  transition: transform 300ms var(--ease-spring);
+}
+
+.chat-orb__badge {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  min-width: 21px;
+  height: 21px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #67e8f9, #a78bfa);
+  color: #04040f;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 0 0 2px rgba(4, 6, 20, 0.85), 0 4px 12px -3px rgba(103, 232, 249, 0.9);
+  animation: badge-spring 460ms var(--ease-spring) both;
+}
+
+@keyframes orb-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -5px, 0);
+  }
+}
+
+@keyframes orb-breathe {
+  0%,
+  100% {
+    transform: scale(0.94);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.82;
+  }
+}
+
+@keyframes orb-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.65);
+    opacity: 0;
+  }
+}
+
+@keyframes orb-flare {
+  0%,
+  100% {
+    filter: blur(7px);
+  }
+  35% {
+    filter: blur(11px);
+  }
+}
+
+@keyframes badge-spring {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   COMMS SHEET — springs out of the orb's corner. Bottom sheet capped at 45vh
+   on portrait phones so the board stays readable; side panel from sm: up,
+   floating above the orb so the orb keeps working as a toggle.
+   -------------------------------------------------------------------------- */
+
+.chat-sheet {
+  position: fixed;
+  z-index: 51;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  left: max(0.5rem, env(safe-area-inset-left));
+  right: max(0.5rem, env(safe-area-inset-right));
+  bottom: max(0.65rem, env(safe-area-inset-bottom));
+  height: min(45vh, 24rem);
+  min-height: 13.5rem;
+  border-radius: 26px;
+  transform-origin: 100% 100%;
+  animation: sheet-in 400ms var(--ease) both;
+}
+
+@media (min-width: 640px) {
+  .chat-sheet {
+    left: auto;
+    right: max(1.25rem, env(safe-area-inset-right));
+    bottom: calc(max(1.25rem, env(safe-area-inset-bottom)) + 78px);
+    width: 21.5rem;
+    height: min(27rem, 62vh);
+    border-radius: 22px;
+  }
+}
+
+@keyframes sheet-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(14px, 20px, 0) scale(0.84);
+  }
+  62% {
+    opacity: 1;
+    transform: translate3d(0, -2px, 0) scale(1.008);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Tilt card — 3D hover lean toward the cursor plus a sheen that follows it.
+   The --tx/--ty/--mx/--my vars are written by useTilt() in GlassUI.tsx.
+   -------------------------------------------------------------------------- */
+
+.tilt {
+  --tx: 0deg;
+  --ty: 0deg;
+  --mx: 50%;
+  --my: 50%;
+  --lift: 0;
+  transform: perspective(900px) rotateX(var(--tx)) rotateY(var(--ty))
+    translate3d(0, calc(var(--lift) * -4px), 0) scale(calc(1 + var(--lift) * 0.012));
+  transform-style: preserve-3d;
+  transition: transform 420ms var(--ease);
+  will-change: transform;
+}
+
+.tilt:active {
+  transition-duration: 110ms;
+  transform: perspective(900px) rotateX(var(--tx)) rotateY(var(--ty)) scale(0.982);
+}
+
+/* cursor-following sheen */
+.tilt::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    38% 55% at var(--mx) var(--my),
+    rgba(255, 255, 255, 0.16),
+    rgba(255, 255, 255, 0) 68%
+  );
+  opacity: var(--lift);
+  transition: opacity 320ms var(--ease);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* --------------------------------------------------------------------------
+   Win celebration — CSS-only glow rays + drifting glass shards.
+   -------------------------------------------------------------------------- */
+
+.celebrate {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* eight rays sweeping out of the trophy, drawn as one conic-gradient sheet */
+.celebrate__rays {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 190vmax;
+  height: 190vmax;
+  margin: -95vmax 0 0 -95vmax;
+  background: conic-gradient(
+    from 0deg,
+    var(--ray, rgba(252, 211, 77, 0.22)) 0deg 5deg,
+    transparent 5deg 45deg,
+    var(--ray, rgba(252, 211, 77, 0.22)) 45deg 50deg,
+    transparent 50deg 90deg,
+    var(--ray, rgba(252, 211, 77, 0.22)) 90deg 95deg,
+    transparent 95deg 135deg,
+    var(--ray, rgba(252, 211, 77, 0.22)) 135deg 140deg,
+    transparent 140deg 180deg,
+    var(--ray, rgba(252, 211, 77, 0.22)) 180deg 185deg,
+    transparent 185deg 225deg,
+    var(--ray, rgba(252, 211, 77, 0.22)) 225deg 230deg,
+    transparent 230deg 270deg,
+    var(--ray, rgba(252, 211, 77, 0.22)) 270deg 275deg,
+    transparent 275deg 315deg,
+    var(--ray, rgba(252, 211, 77, 0.22)) 315deg 320deg,
+    transparent 320deg 360deg
+  );
+  /* fade the rays out toward the edges so they read as beams, not a pinwheel */
+  -webkit-mask: radial-gradient(circle, #000 4%, rgba(0, 0, 0, 0.55) 16%, transparent 34%);
+  mask: radial-gradient(circle, #000 4%, rgba(0, 0, 0, 0.55) 16%, transparent 34%);
+  opacity: 0;
+  animation: rays-in 900ms var(--ease) both, rays-spin 44s linear infinite 900ms;
+  will-change: transform, opacity;
+}
+
+@keyframes rays-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.6) rotate(-14deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes rays-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* glass shards drifting up past the card */
+.celebrate__shard {
+  position: absolute;
+  bottom: -8%;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  background: linear-gradient(
+    140deg,
+    rgba(255, 255, 255, 0.95) 0%,
+    var(--shard, rgba(252, 211, 77, 0.85)) 55%,
+    rgba(255, 255, 255, 0.6) 100%
+  );
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.55),
+    0 0 14px 1px var(--shard, rgba(252, 211, 77, 0.85));
+  opacity: 0;
+  animation: shard-rise var(--shard-dur, 5s) var(--ease) var(--shard-delay, 0ms) infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes shard-rise {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(0.6);
+  }
+  10% {
+    opacity: 1;
+  }
+  72% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--shard-drift, 20px), -80vh, 0) rotate(300deg) scale(1);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   QUANTUM PAIRS — Nova Pulse discharge + the urgent end of the turn clock.
+   Both are transform/opacity/filter only. See components/QuantumHud.tsx.
+   -------------------------------------------------------------------------- */
+
+.nova-fired {
+  animation: nova-fire 620ms var(--ease) 1;
+}
+
+@keyframes nova-fire {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  22% {
+    transform: scale(1.42);
+    filter: brightness(2.4) saturate(1.4);
+  }
+  60% {
+    transform: scale(0.94);
+    filter: brightness(1.1);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+/* Last few seconds: a calm ring starts breathing. */
+.timer-urgent {
+  animation: timer-urgent 900ms ease-in-out infinite;
+}
+
+@keyframes timer-urgent {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.09);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .aurora-blob,
+  .chat-orb__ball,
+  .chat-orb__halo,
+  .celebrate__rays,
+  .celebrate__shard {
+    animation: none !important;
+  }
+  .celebrate__shard {
+    opacity: 0;
+  }
+  .tilt {
+    transform: none !important;
+  }
+}
