@@ -24,3 +24,8 @@ dist-ssr
 *.sln
 *.sw?
 .claude/
+
+# local verification harnesses (hardcode sandbox paths)
+/integration-smoke.mjs
+/qp-smoke.mjs
+dist-test/
