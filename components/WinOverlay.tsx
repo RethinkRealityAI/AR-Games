@@ -21,6 +21,12 @@ interface WinOverlayProps {
   mySlot?: PlayerSlot | null;
   round?: number;
   rematchPending?: boolean;
+  /**
+   * Scored games (Quantum Pairs) hand over their final tally plus a line
+   * explaining how it ended — e.g. a majority clinched with pairs still down.
+   */
+  scoreline?: { values: [number, number]; unit: string } | null;
+  note?: string | null;
   onRematch: () => void;
   onExit: () => void;
 }
@@ -32,6 +38,8 @@ const WinOverlay: React.FC<WinOverlayProps> = ({
   mySlot = null,
   round,
   rematchPending,
+  scoreline = null,
+  note = null,
   onRematch,
   onExit,
 }) => {
@@ -59,7 +67,9 @@ const WinOverlay: React.FC<WinOverlayProps> = ({
       (mode === 'ai' && winner === 0) ||
       (mode === 'online' && mySlot !== null && winner === mySlot));
 
-  const sub = draw
+  const sub = note
+    ? note
+    : draw
     ? 'Nobody claims the sector this round.'
     : mode === 'local'
       ? `${champ?.name} takes the round.`
@@ -130,6 +140,41 @@ const WinOverlay: React.FC<WinOverlayProps> = ({
           {headline}
         </h2>
         <p className="mt-1.5 text-sm text-slate-400">{sub}</p>
+
+        {scoreline && (
+          <div
+            className="mt-4 flex items-center justify-center gap-4"
+            data-testid="win-scoreline"
+          >
+            {([0, 1] as PlayerSlot[]).map((slot) => (
+              <React.Fragment key={slot}>
+                {slot === 1 && (
+                  <span className="font-display text-sm font-bold text-slate-600">—</span>
+                )}
+                <span className="flex min-w-[4.5rem] flex-col items-center gap-0.5">
+                  <span
+                    className="mono text-3xl font-bold leading-none"
+                    style={{
+                      color: winner === slot ? profiles[slot].color : '#94a3b8',
+                      textShadow:
+                        winner === slot ? `0 0 20px ${rgba(profiles[slot].color, 0.6)}` : undefined,
+                    }}
+                  >
+                    {scoreline.values[slot]}
+                  </span>
+                  <span className="max-w-[6rem] truncate text-[11px] font-semibold text-slate-400">
+                    {profiles[slot].name}
+                  </span>
+                </span>
+              </React.Fragment>
+            ))}
+          </div>
+        )}
+        {scoreline && (
+          <p className="mt-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+            {scoreline.unit}
+          </p>
+        )}
 
         {typeof round === 'number' && round > 1 && (
           <p className="mono mt-2 text-[11px] tracking-[0.2em] text-slate-500">ROUND {round}</p>

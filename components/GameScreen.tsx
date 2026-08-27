@@ -3,6 +3,8 @@ import SceneHost from '../engine/SceneHost';
 import Hud from './Hud';
 import ChatDock from './ChatDock';
 import WinOverlay from './WinOverlay';
+import QuantumOpener from './QuantumOpener';
+import type { MemoryBoard } from '../games/memory/logic';
 import { GAMES } from '../games/registry';
 import { getAiMove } from '../services/ai';
 import { netClient } from '../services/net';
@@ -123,6 +125,12 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const [handoff, setHandoff] = useState<PlayerSlot | null>(null);
   const [confirmExit, setConfirmExit] = useState(false);
 
+  // -- Quantum Pairs pre-match (settings + rock-paper-scissors opener) -------
+  const [openerDone, setOpenerDone] = useState(false);
+  /** The human has reached the sigils, so NOVA may commit its hidden pick. */
+  const [openerArmed, setOpenerArmed] = useState(false);
+  const [turnEpoch, setTurnEpoch] = useState(0);
+
   const mySlot: PlayerSlot | null = online ? netClient.slot : null;
 
   // -- rebuild local state if the game ever changes underneath us -----------
@@ -185,8 +193,54 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const winner = core?.winner ?? null;
   const currentSlot: PlayerSlot = core?.currentSlot ?? 0;
 
+  // -- Quantum Pairs ---------------------------------------------------------
+  const isMemory = gameId === 'memory';
+  const memBoard: MemoryBoard | null =
+    isMemory && core ? (core.board as MemoryBoard) : null;
+  /** The opener owns the screen until it has played its reveal. */
+  const inOpener = !!memBoard && !openerDone;
+
+  // A fresh round rewinds to the settings/opener flow.
+  useEffect(() => {
+    if (!isMemory) return;
+    setOpenerDone(false);
+    setOpenerArmed(false);
+  }, [isMemory, round]);
+
+  /**
+   * A new turn starts when the holder changes, when a match earns the holder
+   * another go (their score moved), or when the opener hands over the board.
+   * The clock in the HUD resets on this.
+   */
+  useEffect(() => {
+    if (!memBoard) return;
+    (window as unknown as Record<string, unknown>).__qp = {
+      moveCount: core?.moveCount,
+      currentSlot,
+      phase: memBoard.phase,
+      up: memBoard.up,
+      scores: memBoard.scores,
+      pulses: memBoard.pulses,
+      turnSeconds: memBoard.turnSeconds,
+    };
+  });
+
+  const turnSigRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!memBoard || memBoard.phase !== 'play' || winner !== null) {
+      turnSigRef.current = null;
+      return;
+    }
+    const sig = `${round}:${currentSlot}:${memBoard.scores[0]}:${memBoard.scores[1]}`;
+    if (sig === turnSigRef.current) return;
+    turnSigRef.current = sig;
+    setTurnEpoch((n) => n + 1);
+  }, [memBoard, currentSlot, round, winner]);
+
   const inputEnabled = useMemo(() => {
     if (!core || winner !== null) return false;
+    // Board taps are dead while the opener overlay owns the screen.
+    if (memBoard && (memBoard.phase !== 'play' || !openerDone)) return false;
     if (mode === 'ai') return currentSlot === 0 && !aiThinking;
     if (mode === 'local') return true;
     return (
@@ -195,14 +249,24 @@ const GameScreen: React.FC<GameScreenProps> = ({
       !pending &&
       session?.status === 'active'
     );
-  }, [core, winner, mode, currentSlot, aiThinking, mySlot, pending, session?.status]);
+  }, [core, winner, mode, currentSlot, aiThinking, mySlot, pending, session?.status, memBoard, openerDone]);
 
   // -- moves ----------------------------------------------------------------
+  /**
+   * `slot` overrides who the move is attributed to. Quantum Pairs needs it:
+   * during the opener both seats commit (pass-and-play drives both from this
+   * device, and online either seat may commit while `currentSlot` is still
+   * meaningless), and the HUD fires a pulse or a forfeit for a named slot.
+   */
   const handleMove = useCallback(
-    (move: Move) => {
+    (move: Move, slot?: PlayerSlot) => {
       if (!core || winner !== null) return;
+      // The opener and the host's match settings are not turn-gated.
+      const openPhase = !!memBoard && memBoard.phase === 'rps';
       if (online) {
-        if (mySlot === null || currentSlot !== mySlot) return;
+        if (mySlot === null) return;
+        if (!openPhase && currentSlot !== mySlot) return;
+        if (openPhase && !move.config && slot !== undefined && slot !== mySlot) return;
         setPending(true);
         netClient.sendMove(move).catch((err: unknown) => {
           setPending(false);
@@ -210,16 +274,28 @@ const GameScreen: React.FC<GameScreenProps> = ({
         });
         return;
       }
-      const slot: PlayerSlot = mode === 'ai' ? 0 : currentSlot;
-      dispatch({ type: 'move', move, slot });
+      const actor: PlayerSlot = slot ?? (mode === 'ai' ? 0 : currentSlot);
+      dispatch({ type: 'move', move, slot: actor });
     },
-    [core, winner, online, mySlot, currentSlot, mode],
+    [core, winner, online, mySlot, currentSlot, mode, memBoard],
   );
 
   // -- AI turn --------------------------------------------------------------
+  //
+  // Quantum Pairs adds two wrinkles: NOVA must play the opener too (a hidden
+  // rock-paper-scissors commit, which is not turn-gated), and a match earns it
+  // another turn — so this effect simply re-runs off the new core and keeps
+  // playing while `currentSlot` is still 1, pulses included.
   useEffect(() => {
     if (mode !== 'ai' || !core) return;
-    if (core.winner !== null || core.currentSlot !== 1) return;
+    if (core.winner !== null) return;
+
+    const mb = gameId === 'memory' ? (core.board as MemoryBoard) : null;
+    if (mb && mb.phase === 'rps') {
+      if (!openerArmed || mb.picks[1] !== null) return;
+    } else if (core.currentSlot !== 1) {
+      return;
+    }
 
     let cancelled = false;
     setAiThinking(true);
@@ -236,13 +312,16 @@ const GameScreen: React.FC<GameScreenProps> = ({
       clearTimeout(timer);
       setAiThinking(false);
     };
-  }, [mode, core, gameId, difficulty]);
+  }, [mode, core, gameId, difficulty, openerArmed]);
 
   // -- sound + handoff on state transitions ---------------------------------
   const lastCountRef = useRef(-1);
+  const lastSlotRef = useRef<PlayerSlot | null>(null);
   useEffect(() => {
     if (!core) return;
     const count = core.moveCount;
+    const prevSlot = lastSlotRef.current;
+    lastSlotRef.current = core.currentSlot;
     if (count === lastCountRef.current) return;
     const advanced = count > lastCountRef.current;
     lastCountRef.current = count;
@@ -266,7 +345,12 @@ const GameScreen: React.FC<GameScreenProps> = ({
       // Triple tap on a win, one longer buzz on a loss.
       haptic(iLost ? 40 : [18, 45, 18, 45, 26]);
     } else if (mode === 'local') {
-      setHandoff(core.currentSlot);
+      // Most games alternate on every move. Quantum Pairs does not: the first
+      // pick of a pair and a match both leave the device with the same player,
+      // and the opener runs its own pass-the-device shield.
+      const mb = gameId === 'memory' ? (core.board as MemoryBoard) : null;
+      const passed = !mb || (mb.phase === 'play' && prevSlot !== null && prevSlot !== core.currentSlot);
+      if (passed) setHandoff(core.currentSlot);
     }
   }, [core, gameId, mode, online, mySlot]);
 
@@ -287,7 +371,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
       return;
     }
     lastCountRef.current = -1;
+    lastSlotRef.current = null;
     setHandoff(null);
+    setOpenerDone(false);
+    setOpenerArmed(false);
     sound.playStart();
     dispatch({ type: 'reset' });
   }, [online]);
@@ -305,6 +392,23 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
   // -- controls visibility --------------------------------------------------
   const showReset = !online || mySlot === 0 || winner !== null;
+
+  const openerDismissed = useCallback(() => setOpenerDone(true), []);
+  const openerArm = useCallback(() => setOpenerArmed(true), []);
+
+  // -- Quantum Pairs outcome copy -------------------------------------------
+  let memoryScoreline: { values: [number, number]; unit: string } | null = null;
+  let memoryNote: string | null = null;
+  if (memBoard && winner !== null && winner !== 'DRAW') {
+    const [a, z] = memBoard.scores;
+    memoryScoreline = { values: [a, z], unit: 'pairs claimed' };
+    const hi = Math.max(a, z);
+    const lo = Math.min(a, z);
+    const left = memBoard.pairs - a - z;
+    memoryNote = memBoard.clinched
+      ? `Clinched ${hi}–${lo} with ${left} pair${left === 1 ? '' : 's'} still on the board.`
+      : `Every pair claimed — ${hi}–${lo}.`;
+  }
 
   // -- online handshake states ----------------------------------------------
   if (online && !core) {
@@ -355,7 +459,35 @@ const GameScreen: React.FC<GameScreenProps> = ({
         aiThinking={aiThinking}
         pending={pending}
         session={session}
+        memory={
+          memBoard && !inOpener
+            ? { board: memBoard, turnEpoch, onMove: handleMove }
+            : null
+        }
       />
+
+      {/* --------------------------------------- Quantum Pairs pre-match */}
+      {memBoard && inOpener && (
+        <QuantumOpener
+          board={memBoard}
+          currentSlot={currentSlot}
+          mode={mode}
+          mySlot={mySlot}
+          profiles={activeProfiles}
+          settingsEditable={!online || (mySlot === 0 && session?.status === 'active')}
+          settingsNote={
+            online
+              ? mySlot === 0
+                ? 'Settings unlock once your opponent is in the room.'
+                : 'Only the host can change the table — you will see it update live.'
+              : null
+          }
+          waitingForOpponent={waitingForOpponent}
+          onMove={handleMove}
+          onArmed={openerArm}
+          onDone={openerDismissed}
+        />
+      )}
 
       {/* ------------------------------------------------------- controls */}
       <div
@@ -428,6 +560,8 @@ const GameScreen: React.FC<GameScreenProps> = ({
           mySlot={mySlot}
           round={round}
           rematchPending={rematchPending}
+          scoreline={memoryScoreline}
+          note={memoryNote}
           onRematch={resetGame}
           onExit={doExit}
         />

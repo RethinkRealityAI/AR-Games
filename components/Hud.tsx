@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import type { GameCore, GameMode, PlayerProfile, PlayerSlot, Session } from '../types';
+import type { GameCore, GameMode, Move, PlayerProfile, PlayerSlot, Session } from '../types';
+import type { MemoryBoard } from '../games/memory/logic';
+import QuantumHud from './QuantumHud';
 import { AvatarDot, ThinkingDots, rgba } from './GlassUI';
 
 const AWAY_AFTER_MS = 10_000;
@@ -14,6 +16,15 @@ interface HudProps {
   /** Waiting on the server to echo a move back. */
   pending?: boolean;
   session?: Session | null;
+  /**
+   * Quantum Pairs only: the scored strip (pair totals, pairs left, Nova Pulses
+   * and the turn clock). Absent for every other game.
+   */
+  memory?: {
+    board: MemoryBoard;
+    turnEpoch: number;
+    onMove: (move: Move, slot?: PlayerSlot) => void;
+  } | null;
 }
 
 const PlayerChip: React.FC<{
@@ -66,6 +77,7 @@ const Hud: React.FC<HudProps> = ({
   aiThinking,
   pending,
   session,
+  memory = null,
 }) => {
   // Tick so `lastSeen` based presence decays without a network event.
   const [, setTick] = useState(0);
@@ -88,9 +100,12 @@ const Hud: React.FC<HudProps> = ({
 
   const turnLabel = (): string => {
     if (over) return winner === 'DRAW' ? 'Stalemate' : `${profiles[winner as PlayerSlot].name} wins`;
-    if (mode === 'online') return currentSlot === mySlot ? 'Your move' : 'Their move';
-    if (mode === 'ai') return currentSlot === 0 ? 'Your move' : 'NOVA is moving';
-    return `${profiles[currentSlot].name}'s move`;
+    // Quantum Pairs turns are two picks long, so say which one is due.
+    const half =
+      memory && !memory.board.pendingClear && memory.board.up.length === 1 ? ' — find the twin' : '';
+    if (mode === 'online') return (currentSlot === mySlot ? 'Your move' : 'Their move') + half;
+    if (mode === 'ai') return (currentSlot === 0 ? 'Your move' : 'NOVA is moving') + half;
+    return `${profiles[currentSlot].name}'s move${half}`;
   };
 
   const turnColor =
@@ -117,6 +132,21 @@ const Hud: React.FC<HudProps> = ({
           you={mode === 'online' && mySlot === 1}
         />
       </div>
+
+      {memory && (
+        <QuantumHud
+          board={memory.board}
+          profiles={profiles}
+          currentSlot={currentSlot}
+          winner={winner}
+          mode={mode}
+          mySlot={mySlot}
+          aiThinking={!!aiThinking}
+          pending={!!pending}
+          turnEpoch={memory.turnEpoch}
+          onMove={memory.onMove}
+        />
+      )}
 
       <div className="flex flex-wrap items-center justify-center gap-1.5">
         <span
