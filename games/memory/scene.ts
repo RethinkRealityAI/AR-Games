@@ -461,12 +461,14 @@ export function createMemoryScene(): GameScene {
     galaxy.position.y = -S * 0.55;
     group.add(galaxy);
 
+    // The ring hugs the grid's real footprint: an ellipse, not a circle, so a
+    // wide 6x2 Skirmish and a squarer 6x5 Odyssey both sit snugly inside it
+    // instead of floating in dead space. The torus is authored as a UNIT ring
+    // with the layout carried on the mesh scale — that keeps the cached
+    // geometry valid when the player changes board size mid-session, which the
+    // old radius-baked-into-geometry version silently got wrong.
     const halo = new THREE.Mesh(
-      geo('halo', () =>
-        new THREE.TorusGeometry(Math.max(gridW, gridD) * 0.62 + tile, S * 0.004, 8, 96).rotateX(
-          -Math.PI / 2,
-        ),
-      ),
+      geo('halo', () => new THREE.TorusGeometry(1, 0.008, 8, 96).rotateX(-Math.PI / 2)),
       mat(
         'halo',
         () =>
@@ -479,6 +481,7 @@ export function createMemoryScene(): GameScene {
           }),
       ),
     );
+    halo.scale.set(gridW * 0.5 + tile * 1.15, 1, gridD * 0.5 + tile * 1.15);
     halo.position.y = -slabH * 1.4;
     group.add(halo);
 
@@ -803,7 +806,7 @@ export function createMemoryScene(): GameScene {
         rec.scaleTarget = 0.9;
         rec.spinTarget = 0.55;
         rec.chillTarget = 0;
-        rec.tintTarget = 1;
+        rec.tintTarget = 0.7;
         rec.openTarget = 1;
         if (novaSlot !== null) {
           rec.tintCol.copy(slotColor(novaSlot));
@@ -1255,7 +1258,7 @@ export function createMemoryScene(): GameScene {
             mm.color.copy(u.c0).lerp(u.cChill, rec.chill).lerp(rec.tintCol, rec.tint * 0.45);
           }
           if (u.e0) {
-            mm.emissive.copy(u.e0).lerp(rec.tintCol, Math.max(rec.tint, rec.flare * 0.6));
+            mm.emissive.copy(u.e0).lerp(rec.tintCol, Math.max(rec.tint * 0.5, rec.flare * 0.6));
             mm.emissiveIntensity =
               (u.ei0 ?? 1) * (1 - 0.8 * rec.chill) + rec.tint * 0.4 + rec.flare * 1.1 + fx * 0.45;
           }

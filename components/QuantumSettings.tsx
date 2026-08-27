@@ -24,6 +24,15 @@ import { rgba } from './GlassUI';
 
 const ACCENT = '#34d399';
 
+// Every miniature is laid out on one cell metric, and every card reserves the
+// SAME preview slot — sized to the tallest board in `SIZES`. Without that the
+// 6×5 Odyssey grid outgrows the slot, lands on top of its own "6×5" caption,
+// and the three cards' captions stop lining up with one another.
+const CELL = 7;
+const CELL_GAP = 2;
+const span = (n: number) => n * CELL + (n - 1) * CELL_GAP;
+const PREVIEW_H = span(Math.max(...SIZE_IDS.map((id) => SIZES[id].rows)));
+
 /** Miniature of a board's grid — the shape you are actually choosing. */
 const GridShape: React.FC<{ cols: number; rows: number; active: boolean }> = ({
   cols,
@@ -31,14 +40,19 @@ const GridShape: React.FC<{ cols: number; rows: number; active: boolean }> = ({
   active,
 }) => (
   <span
-    className="grid gap-[2px]"
-    style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, width: cols * 7 + (cols - 1) * 2 }}
+    className="grid"
+    style={{
+      gridTemplateColumns: `repeat(${cols}, ${CELL}px)`,
+      gap: CELL_GAP,
+      width: span(cols),
+      height: span(rows),
+    }}
     aria-hidden
   >
     {Array.from({ length: cols * rows }, (_, i) => (
       <span
         key={i}
-        className="h-[7px] w-[7px] rounded-[2px] transition-colors"
+        className="rounded-[2px] transition-colors"
         style={{
           background: active ? rgba(ACCENT, 0.9) : 'rgba(255,255,255,.22)',
           boxShadow: active ? `0 0 6px ${rgba(ACCENT, 0.55)}` : undefined,
@@ -114,7 +128,10 @@ const QuantumSettings: React.FC<QuantumSettingsProps> = ({
               >
                 {spec.label}
               </span>
-              <span className="my-1 grid h-[26px] place-items-center">
+              <span
+                className="my-1 grid w-full place-items-center"
+                style={{ height: PREVIEW_H }}
+              >
                 <GridShape cols={spec.cols} rows={spec.rows} active={active} />
               </span>
               <span className="mono text-[10px] leading-none text-slate-400">
