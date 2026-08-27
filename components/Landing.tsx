@@ -75,12 +75,27 @@ const GAME_GLYPH: Record<GameId, React.ReactNode> = {
       <circle cx="30" cy="22" r="1.6" fill="currentColor" />
     </svg>
   ),
+  memory: (
+    <svg viewBox="0 0 64 64" className="h-full w-full" fill="none" aria-hidden>
+      {/* a grid of tiles, two of them entangled */}
+      <g stroke="currentColor" strokeWidth="2.2">
+        <rect x="8" y="10" width="20" height="20" rx="5" opacity=".9" />
+        <rect x="36" y="10" width="20" height="20" rx="5" opacity=".45" />
+        <rect x="8" y="36" width="20" height="20" rx="5" opacity=".45" />
+        <rect x="36" y="36" width="20" height="20" rx="5" opacity=".9" />
+      </g>
+      <circle cx="18" cy="20" r="4.5" fill="currentColor" />
+      <circle cx="46" cy="46" r="4.5" fill="currentColor" />
+      <path d="M22 24l20 18" stroke="currentColor" strokeWidth="2" strokeDasharray="3 3" opacity=".8" />
+    </svg>
+  ),
 };
 
 const CARD_TINT: Record<GameId, [string, string]> = {
   tictactoe: ['#22d3ee', '#8b5cf6'],
   connect4: ['#e879f9', '#38bdf8'],
   chess: ['#fbbf24', '#7c3aed'],
+  memory: ['#34d399', '#6366f1'],
 };
 
 /**

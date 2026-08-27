@@ -4,7 +4,7 @@
 // function. Do not change existing fields; adding optional fields is OK.
 // ============================================================================
 
-export type GameId = 'tictactoe' | 'connect4' | 'chess';
+export type GameId = 'tictactoe' | 'connect4' | 'chess' | 'memory';
 
 /** Slot 0 = host / X / first color. Slot 1 = guest / O / second color. */
 export type PlayerSlot = 0 | 1;
@@ -32,6 +32,16 @@ export interface Move {
   from?: number;
   to?: number;
   promotion?: 'q' | 'r' | 'b' | 'n';
+  /** Quantum Pairs: reveal this tile. */
+  tile?: number;
+  /** Quantum Pairs: rock-paper-scissors opener pick. */
+  rps?: 'rock' | 'paper' | 'scissors';
+  /** Quantum Pairs: spend the once-per-game Nova Pulse. */
+  pulse?: true;
+  /** Quantum Pairs: the turn timer expired; end the turn. */
+  pass?: true;
+  /** Quantum Pairs: host-only match settings, legal only before play starts. */
+  config?: { size?: string; theme?: string; turnSeconds?: number };
 }
 
 /** Platform-level game state. `board` is game-specific JSON; games cast it. */
@@ -128,6 +138,12 @@ export interface GameLogic {
   legalMoves(core: GameCore): Move[];
   /** Synchronous local AI. Must return a legal move. */
   aiMove(core: GameCore, slot: PlayerSlot, difficulty: Difficulty): Move;
+  /**
+   * Optional: strip hidden information before sending state to `viewer`.
+   * Games with concealed state (Quantum Pairs' face-down tiles) implement this
+   * so the server never ships a peekable board. Must be pure.
+   */
+  maskCore?(core: GameCore, viewer: PlayerSlot): GameCore;
 }
 
 export interface GameDefinition {

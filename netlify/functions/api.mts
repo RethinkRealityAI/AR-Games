@@ -77,10 +77,21 @@ function json(body: unknown, status = 200): Response {
 
 const fail = (message: string, status: number) => json({ error: message }, status);
 
-/** Strip secrets. Every response body passes through this — tokens never leak. */
-export function publicSession(s: StoredSession): Session {
+/**
+ * Strip secrets. Every response body passes through this — tokens never leak.
+ *
+ * Games with concealed state (Quantum Pairs' face-down tiles) also get their
+ * core masked for `viewer`, so a client can never read the board out of the
+ * network response. A null viewer is an unauthenticated poller and is masked
+ * from both seats' perspectives.
+ */
+export function publicSession(s: StoredSession, viewer: PlayerSlot | null): Session {
   const { tokens: _tokens, ...rest } = s;
-  return rest;
+  const mask = GAMES[rest.gameId]?.logic.maskCore;
+  if (!mask) return rest;
+  const core =
+    viewer === null ? mask(mask(rest.core, 0), 1) : mask(rest.core, viewer);
+  return { ...rest, core };
 }
 
 function randomCode(): string {
@@ -213,7 +224,7 @@ async function createSession(req: Request, store: StoreLike): Promise<Response> 
   };
 
   await store.setJSON(code, session);
-  return json({ code, token: tokens[0], session: publicSession(session) }, 201);
+  return json({ code, token: tokens[0], session: publicSession(session, 0) }, 201);
 }
 
 async function joinSession(req: Request, store: StoreLike, code: string): Promise<Response> {
@@ -239,7 +250,7 @@ async function joinSession(req: Request, store: StoreLike, code: string): Promis
   touch(session, now);
 
   await store.setJSON(code, session);
-  return json({ token: session.tokens[1], session: publicSession(session) });
+  return json({ token: session.tokens[1], session: publicSession(session, 1) });
 }
 
 async function getSession(req: Request, store: StoreLike, code: string): Promise<Response> {
@@ -295,7 +306,7 @@ async function getSession(req: Request, store: StoreLike, code: string): Promise
     return json({ unchanged: true, version: session.version });
   }
 
-  return json({ session: publicSession(session) });
+  return json({ session: publicSession(session, slot) });
 }
 
 async function postMove(req: Request, store: StoreLike, code: string): Promise<Response> {
@@ -309,7 +320,7 @@ async function postMove(req: Request, store: StoreLike, code: string): Promise<R
   if (slot === null) return fail('Invalid player token', 401);
 
   if (body.expectedVersion !== session.version) {
-    return json({ error: 'Version conflict', session: publicSession(session) }, 409);
+    return json({ error: 'Version conflict', session: publicSession(session, slot) }, 409);
   }
 
   if (session.status !== 'active') return fail('Game is not accepting moves', 400);
@@ -335,7 +346,7 @@ async function postMove(req: Request, store: StoreLike, code: string): Promise<R
   touch(session, now);
 
   await store.setJSON(code, session);
-  return json({ session: publicSession(session) });
+  return json({ session: publicSession(session, slot) });
 }
 
 async function postChat(req: Request, store: StoreLike, code: string): Promise<Response> {
@@ -372,7 +383,7 @@ async function postChat(req: Request, store: StoreLike, code: string): Promise<R
   touch(session, now);
 
   await store.setJSON(code, session);
-  return json({ session: publicSession(session) });
+  return json({ session: publicSession(session, slot) });
 }
 
 async function postRematch(req: Request, store: StoreLike, code: string): Promise<Response> {
@@ -406,7 +417,7 @@ async function postRematch(req: Request, store: StoreLike, code: string): Promis
   touch(session, now);
 
   await store.setJSON(code, session);
-  return json({ session: publicSession(session) });
+  return json({ session: publicSession(session, slot) });
 }
 
 async function postLeave(req: Request, store: StoreLike, code: string): Promise<Response> {
@@ -430,7 +441,7 @@ async function postLeave(req: Request, store: StoreLike, code: string): Promise<
   touch(session, now);
 
   await store.setJSON(code, session);
-  return json({ session: publicSession(session) });
+  return json({ session: publicSession(session, slot) });
 }
 
 // ---------------------------------------------------------------------------

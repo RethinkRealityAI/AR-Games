@@ -2,6 +2,7 @@ import { GameDefinition, GameId } from '../types';
 import { tictactoeLogic } from './tictactoe/logic';
 import { connect4Logic } from './connect4/logic';
 import { chessLogic } from './chess/logic';
+import { memoryLogic } from './memory/logic';
 
 export const GAMES: Record<GameId, GameDefinition> = {
   tictactoe: {
@@ -30,6 +31,15 @@ export const GAMES: Record<GameId, GameDefinition> = {
       cardArt: '/assets/card-chess.webp',
     },
     logic: chessLogic,
+  },
+  memory: {
+    meta: {
+      id: 'memory',
+      name: 'Quantum Pairs',
+      tagline: 'Entangle the twins before your rival does',
+      cardArt: '/assets/card-memory.webp',
+    },
+    logic: memoryLogic,
   },
 };
 
